@@ -1,0 +1,460 @@
+"""
+Image management commands for the Herds CLI.
+
+This module contains commands for image upload, processing, and management.
+"""
+
+import click
+import sys
+from pathlib import Path
+
+from herds_cli.output import OutputFormatter
+from herds_cli.core.base import (
+    APIResponseHandler,
+    ImageCommandBase,
+    get_or_detect_session_email,
+)
+
+
+@click.group()
+def image():
+    """Image management commands (upload, etc.)"""
+    pass
+
+
+@image.command()
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--email", help="Email address (autodetect if only one session)")
+@click.option(
+    "--mock", is_flag=True, help="Enable mock AI processing for faster testing"
+)
+@click.option(
+    "--endpoint",
+    default="/api/images/v2/upload",
+    help="API endpoint for upload",
+    show_default=True,
+)
+@click.option(
+    "--alg-version",
+    type=click.Choice(["auto", "v2", "v3"]),
+    default=None,
+    help="Algorithm version to use for image processing ('auto' tries v3 first, fallback to v2)",
+)
+@click.option(
+    "--ocr-text",
+    help="OCR text to include with the upload",
+)
+@click.option(
+    "--barcode",
+    help="Barcode data to include with the upload",
+)
+@click.option(
+    "--add-to-calendar", is_flag=True, help="Request auto-add to connected calendar"
+)
+@click.pass_context
+def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode, add_to_calendar):
+    """Upload an image file with optional algorithm version, mock mode, OCR text, and barcode selection."""
+    session_manager = ctx.obj["session_manager"]
+    image_uploader = ctx.obj["image_uploader"]
+    output_format = ctx.obj["format"]
+    timezone = ctx.obj["timezone"]
+
+    # Get email from session
+    config = ctx.obj["config"]
+    email = get_or_detect_session_email(
+        session_manager, email, show_client_type=True, config=config
+    )
+
+    try:
+        OutputFormatter.print_info(f"Uploading {file_path}...")
+        OutputFormatter.print_info(f"Using timezone: {timezone}")
+        if alg_version:
+            OutputFormatter.print_info(f"Using algorithm version: {alg_version}")
+        if mock:
+            OutputFormatter.print_info("Using mock AI processing mode")
+        if add_to_calendar:
+            OutputFormatter.print_info("Requesting auto-add to calendar")
+        result = image_uploader.upload_image(
+            file_path,
+            email,
+            endpoint,
+            timezone=timezone,
+            alg_version=alg_version,
+            mock_mode=mock,
+            ocr_text=ocr_text,
+            barcode=barcode,
+            add_to_calendar=add_to_calendar,
+        )
+
+        OutputFormatter.print_success(f"Successfully uploaded {Path(file_path).name}")
+        OutputFormatter.print_info(f"Media type: {result.get('media_type', 'unknown')}")
+
+        # Output formatted response
+        if output_format != "table":  # table format already printed above
+            output = OutputFormatter.format_output(result, output_format)
+            if output:  # Only print if there's content
+                click.echo(output)
+
+    except Exception as e:
+        OutputFormatter.print_error(f"Upload failed: {e}")
+        sys.exit(1)
+
+
+@image.command()
+@click.argument("image_id")
+@click.option("--email", help="Email address (autodetect if only one session)")
+@click.pass_context
+def get(ctx, image_id, email):
+    """Get image metadata by ID from the API."""
+    cmd = ImageCommandBase(ctx)
+
+    # Get email and validate session exists
+    email = cmd.setup_session(email, show_client_type=True)
+    cmd.validate_session(email)
+
+    # Load session authentication
+    cmd.load_session_auth(email)
+
+    OutputFormatter.print_info(f"Retrieving image metadata for: {image_id}")
+
+    # Execute API request and handle response
+    url = f"{cmd.api_client.base_url}/api/images/v2/{image_id}"
+    result = cmd.execute_api_request(
+        "GET", url, "Successfully retrieved image metadata"
+    )
+
+    # Display image information using the base class method
+    cmd.display_image_summary(result)
+
+    # Output formatted response
+    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+
+
+@image.command()
+@click.argument("image_id")
+@click.option("--email", help="Email address (autodetect if only one session)")
+@click.pass_context
+def detections(ctx, image_id, email):
+    """Get all detection/response data for an image by ID."""
+    cmd = ImageCommandBase(ctx)
+
+    # Get email and validate session exists
+    email = cmd.setup_session(email, show_client_type=True)
+    cmd.validate_session(email)
+
+    # Load session authentication
+    cmd.load_session_auth(email)
+
+    OutputFormatter.print_info(f"Retrieving detection data for image: {image_id}")
+
+    # Execute API request
+    url = f"{cmd.api_client.base_url}/api/images/v2/{image_id}/detections"
+    result = cmd.execute_api_request("GET", url)
+
+    detections = result.get("responses", [])
+    OutputFormatter.print_success(
+        f"Successfully retrieved {len(detections)} detections"
+    )
+
+    if detections:
+        OutputFormatter.print_info("Detection Summary:")
+        total_cost = 0.0
+
+        for i, detection in enumerate(detections, 1):
+            cost = detection.get("cost", 0)
+            total_cost += cost
+            provider = detection.get("provider", "unknown")
+            model = detection.get("model", "unknown")
+            created = detection.get("created_at", "unknown")
+
+            OutputFormatter.print_info(
+                f"  {i}. {provider}/{model} - Cost: ${cost:.4f} - Created: {created}"
+            )
+
+        OutputFormatter.print_info(f"Total Cost: ${total_cost:.4f}")
+
+        # Display event data summary if available
+        event_data = detections[0].get("event_data", {})
+        if event_data.get("has_event_data"):
+            OutputFormatter.print_info("Event Information:")
+            OutputFormatter.print_info(f"  Title: {event_data.get('title', 'N/A')}")
+            OutputFormatter.print_info(
+                f"  Organizer: {event_data.get('organizer', 'N/A')}"
+            )
+            OutputFormatter.print_info(
+                f"  Category: {event_data.get('category_level_1', 'N/A')}"
+            )
+            if event_data.get("event_date"):
+                OutputFormatter.print_info(f"  Date: {event_data.get('event_date')}")
+    else:
+        OutputFormatter.print_warning("No detections found for this image")
+
+    # Output formatted response
+    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+
+
+@image.command("in-progress")
+@click.option("--email", help="Email address (autodetect if only one session)")
+@click.option(
+    "--limit",
+    default=50,
+    type=int,
+    help="Maximum number of images to return",
+    show_default=True,
+)
+@click.option(
+    "--offset", default=0, type=int, help="Number of images to skip", show_default=True
+)
+@click.option(
+    "--sort-by",
+    default="created_at",
+    type=click.Choice(["created_at", "updated_at", "name"]),
+    help="Field to sort images by",
+    show_default=True,
+)
+@click.option(
+    "--sort-order",
+    default="desc",
+    type=click.Choice(["asc", "desc"]),
+    help="Sort order (ascending or descending)",
+    show_default=True,
+)
+@click.pass_context
+def in_progress(ctx, email, limit, offset, sort_by, sort_order):
+    """List images currently in progress (pending or processing status).
+
+    Shows all images that are currently being processed by the AI system.
+    Images with extraction_status of 'pending' or 'processing' are included.
+
+    The results are paginated - use --offset to see more images.
+
+    Examples:
+        herds_cli image in-progress
+        herds_cli image in-progress --limit 20 --offset 40
+        herds_cli image in-progress --sort-by name --sort-order asc
+        herds_cli image in-progress --email user@example.com
+    """
+    cmd = ImageCommandBase(ctx)
+
+    # Get email and validate session exists
+    email = cmd.setup_session(email, show_client_type=True)
+    cmd.validate_session(email)
+
+    # Load session authentication
+    cmd.load_session_auth(email)
+
+    # Build query parameters
+    params = {
+        "limit": limit,
+        "offset": offset,
+        "sort_by": sort_by,
+        "sort_order": sort_order,
+    }
+
+    OutputFormatter.print_info(
+        f"Retrieving in-progress images (limit: {limit}, offset: {offset})..."
+    )
+
+    # Execute API request
+    url = f"{cmd.api_client.base_url}/api/images/v2/images/in-progress"
+    result = cmd.execute_api_request("GET", url, params=params)
+
+    images = result.get("images", [])
+    total_count = result.get("total_count", 0)
+    has_more = result.get("has_more", False)
+    next_offset = result.get("next_offset")
+
+    # Display summary
+    if images:
+        OutputFormatter.print_success(
+            f"Found {total_count} images in progress (showing {len(images)})"
+        )
+
+        # Calculate page info
+        current_page = (offset // limit) + 1
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
+
+        if total_pages > 1:
+            OutputFormatter.print_info(
+                f"Page {current_page} of {total_pages} "
+                f"(use --offset {next_offset or (offset + limit)} to see next page)"
+            )
+
+        # Display images
+        OutputFormatter.print_info("Images in progress:")
+        for i, image in enumerate(images, 1):
+            image_id = image.get("image_id", "unknown")
+            image_name = image.get("image_name", "unnamed")
+            status = image.get("image_extraction_status", "unknown")
+            created_at = image.get("image_created_at", "unknown")
+            size_mb = image.get("original_size_mb")
+
+            # Format size display
+            size_display = f" ({size_mb:.1f}MB)" if size_mb else ""
+
+            # Format ID for display (show first 8 chars)
+            short_id = image_id[:8] if len(image_id) > 8 else image_id
+
+            OutputFormatter.print_info(
+                f"  {i}. [{short_id}] {image_name} - {status}{size_display}"
+            )
+            OutputFormatter.print_info(f"     Created: {created_at}")
+    else:
+        OutputFormatter.print_warning("No images currently in progress")
+
+    # Output formatted response
+    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+
+
+@image.command()
+@click.argument("image_id")
+@click.option("--email", help="Email address (autodetect if only one session)")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+@click.pass_context
+def delete(ctx, image_id, email, yes):
+    """Delete an image by ID.
+
+    This action cannot be undone. The image and all associated data (S3 files, responses) will be permanently deleted.
+    """
+    cmd = ImageCommandBase(ctx)
+
+    # Get email and validate session exists
+    email = cmd.setup_session(email, show_client_type=True)
+    cmd.validate_session(email)
+
+    # Confirm deletion unless --yes flag is used
+    if not yes:
+        OutputFormatter.print_warning(f"You are about to delete image: {image_id}")
+        OutputFormatter.print_warning("This action cannot be undone!")
+        if not click.confirm("Are you sure you want to continue?"):
+            OutputFormatter.print_info("Deletion cancelled.")
+            return
+
+    OutputFormatter.print_info(f"Deleting image: {image_id}")
+
+    # Use the API client method
+    result = cmd.api_client.delete_image(email, image_id)
+
+    OutputFormatter.print_success(f"Successfully deleted image {image_id}")
+
+    # Output formatted response
+    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+
+
+@image.command()
+@click.argument("image_id")
+@click.option("--email", help="Email address (autodetect if only one session)")
+@click.option(
+    "--type",
+    "image_type",
+    type=click.Choice(["original", "resized", "thumbnail"]),
+    default="resized",
+    help="Which image version to display",
+    show_default=True,
+)
+@click.option(
+    "--width",
+    default="auto",
+    help="Display width for iTerm2 (e.g., '800px', '50%', 'auto')",
+    show_default=True,
+)
+@click.option(
+    "--save", type=click.Path(), help="Save image to file instead of displaying"
+)
+@click.pass_context
+def show(ctx, image_id, email, image_type, width, save):
+    """Display an image by ID in the terminal.
+
+    Fetches the image metadata and displays the specified image version inline
+    in iTerm2. If not in iTerm2, saves to a temporary file instead.
+
+    Examples:
+        herds_cli image show abc123def456
+        herds_cli image show abc123def456 --type original
+        herds_cli image show abc123def456 --type thumbnail --width 400px
+        herds_cli image show abc123def456 --save my_image.jpg
+    """
+    from herds_cli.image_display import ImageDisplay
+
+    cmd = ImageCommandBase(ctx)
+
+    # Get email and validate session exists
+    email = cmd.setup_session(email, show_client_type=True)
+    cmd.validate_session(email)
+
+    # Load session authentication
+    cmd.load_session_auth(email)
+
+    OutputFormatter.print_info(f"Retrieving image metadata for: {image_id}")
+
+    # Fetch image metadata
+    url = f"{cmd.api_client.base_url}/api/images/v2/{image_id}"
+    result = cmd.execute_api_request("GET", url)
+
+    # Map image_type to the correct field name in the response
+    type_to_field = {
+        "original": "image_path",
+        "resized": "resized_path",
+        "thumbnail": "thumbnail_path",
+    }
+
+    field_name = type_to_field[image_type]
+    image_url = result.get(field_name)
+
+    # Check if the requested image path exists
+    if not image_url:
+        OutputFormatter.print_error(
+            f"The {image_type} image is not available for this image."
+        )
+
+        # Provide helpful information about available versions
+        available_types = []
+        if result.get("image_path"):
+            available_types.append("original")
+        if result.get("resized_path"):
+            available_types.append("resized")
+        if result.get("thumbnail_path"):
+            available_types.append("thumbnail")
+
+        if available_types:
+            OutputFormatter.print_info(f"Available types: {', '.join(available_types)}")
+
+        sys.exit(1)
+
+    # Display status information
+    if image_type == "resized":
+        status = result.get("resize_status", "unknown")
+        OutputFormatter.print_info(f"Resize status: {status}")
+    elif image_type == "thumbnail":
+        status = result.get("thumbnail_status", "unknown")
+        OutputFormatter.print_info(f"Thumbnail status: {status}")
+
+    OutputFormatter.print_info(f"Fetching {image_type} image...")
+
+    # Download the image bytes
+    try:
+        image_bytes = cmd.api_client.fetch_authenticated_image(image_url)
+    except Exception as e:
+        OutputFormatter.print_error(f"Failed to fetch image: {e}")
+        sys.exit(1)
+
+    # Either save to file or display in terminal
+    if save:
+        try:
+            ImageDisplay.save_image(image_bytes, save)
+            OutputFormatter.print_success(f"Image saved successfully")
+        except Exception as e:
+            OutputFormatter.print_error(f"Failed to save image: {e}")
+            sys.exit(1)
+    else:
+        try:
+            OutputFormatter.print_info(f"Displaying {image_type} image...")
+            ImageDisplay.display_in_iterm(image_bytes, width)
+
+            # Show helpful info
+            image_size_mb = len(image_bytes) / (1024 * 1024)
+            OutputFormatter.print_info(f"Image size: {image_size_mb:.2f} MB")
+
+        except Exception as e:
+            OutputFormatter.print_error(f"Failed to display image: {e}")
+            sys.exit(1)
