@@ -674,7 +674,7 @@ class APIClient:
             self.handle_api_error(response)
 
     def fetch_authenticated_image(self, url: str) -> bytes:
-        """Fetch an image from an authenticated Supabase URL.
+        """Fetch an image from an authenticated URL.
 
         Args:
             url: The authenticated URL to fetch the image from

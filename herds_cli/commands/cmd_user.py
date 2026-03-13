@@ -18,7 +18,13 @@ from herds_cli.core.base import (
 
 @click.group()
 def user():
-    """User management commands (login, logout, create account, etc.)"""
+    """User management commands (login, logout, create account, etc.)
+
+    \b
+    TIP: If you have multiple sessions, set a default account to avoid
+    specifying --email on every command:
+      herds config set default_account user@example.com
+    """
     pass
 
 
@@ -118,7 +124,7 @@ def login_google(ctx):
     authentication process automatically.
 
     Usage:
-    ./scripts/herds_cli user login-google
+    herds user login-google
     """
 
     api_client = ctx.obj["api_client"]
@@ -298,7 +304,8 @@ def logout(ctx, email):
             OutputFormatter.print_info(f"Auto-detected session: {email}")
         else:
             OutputFormatter.print_error(
-                "Multiple sessions found. Please specify --email"
+                "Multiple sessions found. Please specify --email or set a default account with:\n"
+                "  herds config set default_account <email>"
             )
             OutputFormatter.print_info("Available sessions:")
             for session in sessions:
@@ -487,7 +494,7 @@ def whoami(ctx, email):
     sessions = session_manager.list_sessions()
     if len(sessions) == 0:
         OutputFormatter.print_error("No active sessions found. Please login first.")
-        OutputFormatter.print_info("Run: python herds_cli/cli.py user login")
+        OutputFormatter.print_info("Run: herds user login")
         return
     elif len(sessions) == 1:
         email = sessions[0]["email"]

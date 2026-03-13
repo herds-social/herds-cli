@@ -255,7 +255,7 @@ def get_or_detect_session_email(
     sessions = session_manager.list_sessions()
     if len(sessions) == 0:
         OutputFormatter.print_error("No active sessions found. Please login first.")
-        OutputFormatter.print_info("Run: python herds_cli/cli.py user login")
+        OutputFormatter.print_info("Run: herds user login")
         sys.exit(1)
     elif len(sessions) == 1:
         email = sessions[0]["email"]
@@ -270,7 +270,8 @@ def get_or_detect_session_email(
 
         # Multiple sessions and no default account configured
         OutputFormatter.print_error(
-            "Multiple sessions found. Please specify --email or configure a default account"
+            "Multiple sessions found. Please specify --email or set a default account with:\n"
+            "  herds config set default_account <email>"
         )
         OutputFormatter.print_info("Available sessions:")
         for session in sessions:

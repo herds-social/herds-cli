@@ -128,7 +128,7 @@ class ImageUploader:
         if not self.api_client.load_session_auth(email):
             raise Exception(
                 f"No valid session found for {email}. Please login first using: "
-                "python herds_cli/cli.py user login"
+                "herds user login"
             )
 
         # Detect media type

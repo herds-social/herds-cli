@@ -229,10 +229,10 @@ def in_progress(ctx, email, limit, offset, sort_by, sort_order):
     The results are paginated - use --offset to see more images.
 
     Examples:
-        herds_cli image in-progress
-        herds_cli image in-progress --limit 20 --offset 40
-        herds_cli image in-progress --sort-by name --sort-order asc
-        herds_cli image in-progress --email user@example.com
+        herds image in-progress
+        herds image in-progress --limit 20 --offset 40
+        herds image in-progress --sort-by name --sort-order asc
+        herds image in-progress --email user@example.com
     """
     cmd = ImageCommandBase(ctx)
 
@@ -369,10 +369,10 @@ def show(ctx, image_id, email, image_type, width, save):
     in iTerm2. If not in iTerm2, saves to a temporary file instead.
 
     Examples:
-        herds_cli image show abc123def456
-        herds_cli image show abc123def456 --type original
-        herds_cli image show abc123def456 --type thumbnail --width 400px
-        herds_cli image show abc123def456 --save my_image.jpg
+        herds image show abc123def456
+        herds image show abc123def456 --type original
+        herds image show abc123def456 --type thumbnail --width 400px
+        herds image show abc123def456 --save my_image.jpg
     """
     from herds_cli.image_display import ImageDisplay
 

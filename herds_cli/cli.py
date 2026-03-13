@@ -138,6 +138,10 @@ def cli(
     """Herds CLI Tool - Unified interface for user and image operations."""
     ctx.ensure_object(dict)
 
+    # Allow tests to inject pre-built dependencies via obj={"_initialized": True}
+    if ctx.obj.get("_initialized"):
+        return
+
     # Load configuration
     try:
         # If no config file specified, try local then ~/.herds/

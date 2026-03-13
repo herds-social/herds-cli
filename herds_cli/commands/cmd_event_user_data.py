@@ -39,9 +39,9 @@ def update_event_user_data(
     existing field values are preserved if not specified.
 
     Examples:
-        herds_cli event-user-data update --event-id 507f1f77bcf86cd799439011 --apple-calendar-id evt_apple_12345
-        herds_cli event-user-data update --event-id 507f1f77bcf86cd799439011 --google-calendar-id evt_google_67890
-        herds_cli event-user-data update --event-id 507f1f77bcf86cd799439011 --apple-calendar-id evt_apple_12345 --google-calendar-id evt_google_67890
+        herds event-user-data update --event-id 507f1f77bcf86cd799439011 --apple-calendar-id evt_apple_12345
+        herds event-user-data update --event-id 507f1f77bcf86cd799439011 --google-calendar-id evt_google_67890
+        herds event-user-data update --event-id 507f1f77bcf86cd799439011 --apple-calendar-id evt_apple_12345 --google-calendar-id evt_google_67890
     """
     cmd = CommandBase(ctx)
 
