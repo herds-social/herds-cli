@@ -200,15 +200,15 @@ def update_settings(
     Only specified fields will be updated; existing values are preserved for unspecified fields.
 
     Examples:
-        herds_cli user-settings update --default-calendar "Family"
-        herds_cli user-settings update --sort-by date_start --sort-order desc --filter-by in_calendar
-        herds_cli user-settings update --default-calendar "Work" --sort-by utc_start
-        herds_cli user-settings update --theme dark --auto-add-to-calendar=True
-        herds_cli user-settings update --theme system --auto-add-to-calendar=False
-        herds_cli user-settings update --date-filter upcoming
-        herds_cli user-settings update --date-filter all
-        herds_cli user-settings update --date-filter past-3-months
-        herds_cli user-settings update --date-filter past-2-weeks
+        herds user-settings update --default-calendar "Family"
+        herds user-settings update --sort-by date_start --sort-order desc --filter-by in_calendar
+        herds user-settings update --default-calendar "Work" --sort-by utc_start
+        herds user-settings update --theme dark --auto-add-to-calendar=True
+        herds user-settings update --theme system --auto-add-to-calendar=False
+        herds user-settings update --date-filter upcoming
+        herds user-settings update --date-filter all
+        herds user-settings update --date-filter past-3-months
+        herds user-settings update --date-filter past-2-weeks
     """
     cmd = CommandBase(ctx)
 

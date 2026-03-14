@@ -52,8 +52,8 @@ def show(ctx, config_file):
         HERDS_SESSION_DIR          - Set session_dir
 
     EXAMPLES:
-        herds_cli config show
-        herds_cli config show --config my-config.json
+        herds config show
+        herds config show --config my-config.json
     """
     # Try to load from config file if it exists, otherwise use current config
     try:
@@ -174,7 +174,7 @@ def reset():
 @click.option(
     "--prod",
     is_flag=True,
-    help="Set api_url to production (https://herds.onrender.com)",
+    help="Set api_url to production (https://api.herds.events)",
 )
 @click.argument("key", required=False)
 @click.argument("value", required=False)
@@ -192,7 +192,7 @@ def set(ctx, config_file, local, prod, key, value):
     API URL SHORTCUTS:
     \b
       config set api_url --local    - Set to http://localhost:8000
-      config set api_url --prod     - Set to https://herds.onrender.com
+      config set api_url --prod     - Set to https://api.herds.events
 
     \b
     CONFIGURABLE VARIABLES:
@@ -222,20 +222,20 @@ def set(ctx, config_file, local, prod, key, value):
     EXAMPLES:
     \b
       # Set API URL using shortcuts
-      herds_cli config set api_url --local
-      herds_cli config set api_url --prod
+      herds config set api_url --local
+      herds config set api_url --prod
 
       # Set specific value programmatically
-      herds_cli config set api_url https://api.example.com
+      herds config set api_url https://api.example.com
 
       # Interactive mode for specific key
-      herds_cli config set api_url
+      herds config set api_url
 
       # Interactive wizard for all settings
-      herds_cli config set
+      herds config set
 
       # Save to specific config file
-      herds_cli config set --config my-config.json api_url https://api.example.com
+      herds config set --config my-config.json api_url https://api.example.com
     """
     # Handle environment shortcuts (--local and --prod)
     if local or prod:
@@ -250,8 +250,8 @@ def set(ctx, config_file, local, prod, key, value):
             OutputFormatter.print_error(
                 "Environment shortcuts (--local, --prod) require specifying 'api_url' as the key"
             )
-            OutputFormatter.print_info("Usage: herds_cli config set api_url --local")
-            OutputFormatter.print_info("       herds_cli config set api_url --prod")
+            OutputFormatter.print_info("Usage: herds config set api_url --local")
+            OutputFormatter.print_info("       herds config set api_url --prod")
             sys.exit(1)
 
         if key != "api_url":
@@ -265,10 +265,10 @@ def set(ctx, config_file, local, prod, key, value):
                 "Cannot provide both an environment shortcut flag and a direct value"
             )
             OutputFormatter.print_info(
-                "Use either: herds_cli config set api_url --local"
+                "Use either: herds config set api_url --local"
             )
             OutputFormatter.print_info(
-                "        or: herds_cli config set api_url https://custom.com"
+                "        or: herds config set api_url https://custom.com"
             )
             sys.exit(1)
 
@@ -276,7 +276,7 @@ def set(ctx, config_file, local, prod, key, value):
         if local:
             value = "http://localhost:8000"
         elif prod:
-            value = "https://herds.onrender.com"
+            value = "https://api.herds.events"
 
     # Load existing configuration from file if it exists, otherwise use current config
     try:
@@ -338,13 +338,13 @@ def set(ctx, config_file, local, prod, key, value):
 
     # Handle different command modes
     if key and value:
-        # Programmatic mode: herds_cli config set key value
+        # Programmatic mode: herds config set key value
         _set_single_value(config_obj, config_keys, key, value, config_file)
     elif key:
-        # Interactive mode for specific key: herds_cli config set key
+        # Interactive mode for specific key: herds config set key
         _set_single_value_interactive(config_obj, config_keys, key, config_file)
     else:
-        # Interactive wizard mode: herds_cli config set
+        # Interactive wizard mode: herds config set
         _set_interactive_wizard(config_obj, config_keys, config_file)
 
 

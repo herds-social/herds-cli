@@ -65,11 +65,11 @@ def list_events(
 
     \b
     Examples:
-        herds_cli events list                              # upcoming events (default)
-        herds_cli events list --date-filter all             # all events
-        herds_cli events list --date-filter past-3-months   # past 3 months + future
-        herds_cli events list --date-filter past-2-weeks    # past 2 weeks + future
-        herds_cli events list --date-filter 2025-12-01..    # from Dec 2025 onward
+        herds events list                              # upcoming events (default)
+        herds events list --date-filter all             # all events
+        herds events list --date-filter past-3-months   # past 3 months + future
+        herds events list --date-filter past-2-weeks    # past 2 weeks + future
+        herds events list --date-filter 2025-12-01..    # from Dec 2025 onward
     """
     cmd = EventCommandBase(ctx)
 
@@ -293,12 +293,12 @@ def update_event(
       (or default to 1 hour if no end time was previously set)
 
     Examples:
-        herds_cli events update 507f1f77bcf86cd799439011 --title "Updated Event Title"
-        herds_cli events update 507f1f77bcf86cd799439011 --date-start 2025-01-15 --time-start 14:30
-        herds_cli events update 507f1f77bcf86cd799439011 --is-all-day=true
-        herds_cli events update 507f1f77bcf86cd799439011 --is-all-day=false
-        herds_cli events update 507f1f77bcf86cd799439011 --city "New York" --organizer "John Doe"
-        herds_cli events update 507f1f77bcf86cd799439011 --apple-calendar-id evt_apple_12345
+        herds events update 507f1f77bcf86cd799439011 --title "Updated Event Title"
+        herds events update 507f1f77bcf86cd799439011 --date-start 2025-01-15 --time-start 14:30
+        herds events update 507f1f77bcf86cd799439011 --is-all-day=true
+        herds events update 507f1f77bcf86cd799439011 --is-all-day=false
+        herds events update 507f1f77bcf86cd799439011 --city "New York" --organizer "John Doe"
+        herds events update 507f1f77bcf86cd799439011 --apple-calendar-id evt_apple_12345
     """
     session_manager = ctx.obj["session_manager"]
     api_client = ctx.obj["api_client"]
@@ -425,14 +425,17 @@ def get_or_detect_session_email(session_manager, email, show_client_type=False):
     sessions = session_manager.list_sessions()
     if len(sessions) == 0:
         OutputFormatter.print_error("No active sessions found. Please login first.")
-        OutputFormatter.print_info("Run: python herds_cli/cli.py user login")
+        OutputFormatter.print_info("Run: herds user login")
         sys.exit(1)
     elif len(sessions) == 1:
         email = sessions[0]["email"]
         OutputFormatter.print_info(f"Auto-detected session: {email}")
         return email
     else:
-        OutputFormatter.print_error("Multiple sessions found. Please specify --email")
+        OutputFormatter.print_error(
+            "Multiple sessions found. Please specify --email or set a default account with:\n"
+            "  herds config set default_account <email>"
+        )
         OutputFormatter.print_info("Available sessions:")
         for session in sessions:
             if show_client_type:

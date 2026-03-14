@@ -87,7 +87,7 @@ The OAuth flow times out after 5 minutes. Restart the process if needed.
 The CLI integrates with the existing `/api/users/auth/google` endpoint in the Herds backend, which:
 
 - Accepts Google ID tokens
-- Exchanges them for Supabase session tokens
+- Exchanges them for session tokens
 - Creates user accounts automatically on first login
 - Supports both mobile and web client types (CLI uses mobile)</contents>
 </xai:function_call="read_lints">

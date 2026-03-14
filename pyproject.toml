@@ -20,3 +20,8 @@ dependencies = [
 
 [project.scripts]
 herds = "herds_cli.cli:cli"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

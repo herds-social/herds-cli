@@ -41,8 +41,8 @@ def connect(ctx, email, provider, open_browser):
     Returns an OAuth URL to open in a browser. The server handles the callback.
 
     Examples:
-        herds_cli calendar connect --provider google
-        herds_cli calendar connect --provider outlook --open
+        herds calendar connect --provider google
+        herds calendar connect --provider outlook --open
     """
     cmd = CommandBase(ctx)
 
@@ -86,7 +86,7 @@ def status(ctx, email):
     """Check current calendar connection status.
 
     Examples:
-        herds_cli calendar status
+        herds calendar status
     """
     cmd = CommandBase(ctx)
 
@@ -120,7 +120,7 @@ def list_calendars(ctx, email):
     Requires an active calendar connection.
 
     Examples:
-        herds_cli calendar list
+        herds calendar list
     """
     cmd = CommandBase(ctx)
 
@@ -159,8 +159,8 @@ def set_calendar(ctx, email, calendar_id, calendar_name):
     """Set which calendar to use for new events.
 
     Examples:
-        herds_cli calendar set-calendar --calendar-id primary
-        herds_cli calendar set-calendar --calendar-id abc123 --calendar-name "Work"
+        herds calendar set-calendar --calendar-id primary
+        herds calendar set-calendar --calendar-id abc123 --calendar-name "Work"
     """
     cmd = CommandBase(ctx)
 
@@ -191,8 +191,8 @@ def disconnect(ctx, email, yes):
     """Disconnect the calendar provider and remove stored tokens.
 
     Examples:
-        herds_cli calendar disconnect
-        herds_cli calendar disconnect -y
+        herds calendar disconnect
+        herds calendar disconnect -y
     """
     cmd = CommandBase(ctx)
 
@@ -228,7 +228,7 @@ def add_event(ctx, event_id, email):
     """Add a Herds event to your connected calendar.
 
     Examples:
-        herds_cli calendar add-event abc123
+        herds calendar add-event abc123
     """
     cmd = CommandBase(ctx)
 
@@ -291,7 +291,7 @@ def remove_event(ctx, event_id, email):
     Idempotent — succeeds even if the event isn't in a calendar.
 
     Examples:
-        herds_cli calendar remove-event abc123
+        herds calendar remove-event abc123
     """
     cmd = CommandBase(ctx)
 
