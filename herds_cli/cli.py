@@ -18,6 +18,7 @@ from .sessions import SessionManager, HERDS_DIR
 from .images import ImageUploader
 from .output import OutputFormatter
 from .core.config import Config
+from .core.exceptions import HerdsError
 from .commands import (
     user,
     image,
@@ -27,6 +28,21 @@ from .commands import (
     user_settings,
     calendar,
 )
+
+
+class HerdsGroup(click.Group):
+    """Custom Click group that catches HerdsError and exits gracefully.
+
+    Domain exceptions from core/base.py helpers already print user-friendly
+    error messages before raising. This handler ensures the process exits
+    with code 1 instead of showing a traceback.
+    """
+
+    def invoke(self, ctx):
+        try:
+            return super().invoke(ctx)
+        except HerdsError:
+            sys.exit(1)
 
 
 def detect_system_timezone() -> str:
@@ -89,7 +105,7 @@ def validate_timezone(timezone: str) -> str:
             )
 
 
-@click.group()
+@click.group(cls=HerdsGroup)
 @click.option(
     "--config",
     help="Path to JSON configuration file (auto-detected if not specified)",

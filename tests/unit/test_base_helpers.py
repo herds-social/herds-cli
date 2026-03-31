@@ -2,7 +2,7 @@
 Unit tests for base.py helper functions and APIResponseHandler.
 
 Tests session detection, user ID extraction, and error response handling.
-These functions call sys.exit() on failure, so we catch SystemExit.
+These functions raise domain-specific exceptions on failure.
 """
 
 from unittest.mock import MagicMock
@@ -17,6 +17,12 @@ from herds_cli.core.base import (
     APIResponseHandler,
 )
 from herds_cli.core.config import Config
+from herds_cli.core.exceptions import (
+    AmbiguousSessionError,
+    NoSessionsError,
+    SessionNotFoundError,
+    UserIdNotFoundError,
+)
 
 
 class TestGetOrDetectSessionEmail:
@@ -36,11 +42,11 @@ class TestGetOrDetectSessionEmail:
         result = get_or_detect_session_email(mock_session_manager, None)
         assert result == "only@example.com"
 
-    def test_no_sessions_exits(self, mock_session_manager):
-        with pytest.raises(SystemExit):
+    def test_no_sessions_raises(self, mock_session_manager):
+        with pytest.raises(NoSessionsError):
             get_or_detect_session_email(mock_session_manager, None)
 
-    def test_multiple_sessions_no_default_exits(self, mock_session_manager):
+    def test_multiple_sessions_no_default_raises(self, mock_session_manager):
         mock_session_manager.save_session("a@example.com", {
             "client_type": "mobile",
             "tokens": {"access_token": "tok"},
@@ -52,8 +58,10 @@ class TestGetOrDetectSessionEmail:
             "user_data": {"id": "u2", "email": "b@example.com"},
         })
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(AmbiguousSessionError) as exc_info:
             get_or_detect_session_email(mock_session_manager, None)
+        assert "a@example.com" in exc_info.value.emails
+        assert "b@example.com" in exc_info.value.emails
 
     def test_multiple_sessions_with_default_account(self, mock_session_manager):
         mock_session_manager.save_session("a@example.com", {
@@ -73,7 +81,7 @@ class TestGetOrDetectSessionEmail:
         )
         assert result == "b@example.com"
 
-    def test_default_account_not_found_exits(self, mock_session_manager):
+    def test_default_account_not_found_raises(self, mock_session_manager):
         mock_session_manager.save_session("a@example.com", {
             "client_type": "mobile",
             "tokens": {"access_token": "tok"},
@@ -86,7 +94,7 @@ class TestGetOrDetectSessionEmail:
         })
 
         config = Config(default_account="unknown@example.com")
-        with pytest.raises(SystemExit):
+        with pytest.raises(AmbiguousSessionError):
             get_or_detect_session_email(
                 mock_session_manager, None, config=config
             )
@@ -103,7 +111,7 @@ class TestGetOrDetectSessionEmail:
             "user_data": {"id": "u2", "email": "b@example.com"},
         })
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(AmbiguousSessionError):
             get_or_detect_session_email(
                 mock_session_manager, None, show_client_type=True
             )
@@ -124,9 +132,10 @@ class TestValidateSessionExists:
         result = validate_session_exists(mock_session_manager, "test@example.com")
         assert result["email"] == "test@example.com"
 
-    def test_missing_session_exits(self, mock_session_manager):
-        with pytest.raises(SystemExit):
+    def test_missing_session_raises(self, mock_session_manager):
+        with pytest.raises(SessionNotFoundError) as exc_info:
             validate_session_exists(mock_session_manager, "nobody@example.com")
+        assert exc_info.value.email == "nobody@example.com"
 
 
 class TestExtractUserIdFromSession:
@@ -150,17 +159,17 @@ class TestExtractUserIdFromSession:
         result = extract_user_id_from_session(mock_session_manager, "test@example.com")
         assert result == "user-456"
 
-    def test_no_user_data_exits(self, mock_session_manager):
+    def test_no_user_data_raises(self, mock_session_manager):
         mock_session_manager.save_session("test@example.com", {
             "client_type": "mobile",
             "tokens": {"access_token": "tok"},
         })
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(UserIdNotFoundError):
             extract_user_id_from_session(mock_session_manager, "test@example.com")
 
-    def test_missing_session_exits(self, mock_session_manager):
-        with pytest.raises(SystemExit):
+    def test_missing_session_raises(self, mock_session_manager):
+        with pytest.raises(UserIdNotFoundError):
             extract_user_id_from_session(mock_session_manager, "nobody@example.com")
 
 
