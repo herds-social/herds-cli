@@ -7,6 +7,15 @@ and utilities used across all command modules.
 
 from .base import CommandBase, APIResponseHandler, EventCommandBase, ImageCommandBase
 from .config import Config
+from .exceptions import (
+    AmbiguousSessionError,
+    APIRequestError,
+    AuthenticationError,
+    HerdsError,
+    NoSessionsError,
+    SessionNotFoundError,
+    UserIdNotFoundError,
+)
 
 __all__ = [
     "CommandBase",
@@ -14,4 +23,11 @@ __all__ = [
     "EventCommandBase",
     "ImageCommandBase",
     "Config",
+    "AmbiguousSessionError",
+    "APIRequestError",
+    "AuthenticationError",
+    "HerdsError",
+    "NoSessionsError",
+    "SessionNotFoundError",
+    "UserIdNotFoundError",
 ]

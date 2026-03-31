@@ -5,9 +5,16 @@ This module contains shared base classes and helper functions used across
 all command modules.
 """
 
-import sys
-
 from herds_cli.api import APIClient
+from herds_cli.core.exceptions import (
+    AmbiguousSessionError,
+    APIRequestError,
+    AuthenticationError,
+    HerdsError,
+    NoSessionsError,
+    SessionNotFoundError,
+    UserIdNotFoundError,
+)
 from herds_cli.output import OutputFormatter
 
 
@@ -47,13 +54,13 @@ class CommandBase:
     def load_session_auth(self, email):
         """Load session authentication for API requests.
 
-        Returns True if successful, exits with error if failed.
+        Returns True if successful, raises AuthenticationError if failed.
         """
         if not self.api_client.load_session_auth(email):
             OutputFormatter.print_error(
                 f"No valid session found for {email}. Please login first."
             )
-            sys.exit(1)
+            raise AuthenticationError(email)
         return True
 
     def execute_api_request(self, method, url, success_msg=None, **kwargs):
@@ -66,7 +73,7 @@ class CommandBase:
             **kwargs: Additional arguments for _make_request
 
         Returns:
-            Parsed JSON response data on success, exits on error
+            Parsed JSON response data on success, raises APIRequestError on error
         """
         try:
             response = self.api_client._make_request(method, url, **kwargs)
@@ -78,11 +85,16 @@ class CommandBase:
                 return result
             else:
                 APIResponseHandler.handle_error_response(response, f"{method} {url}")
-                sys.exit(1)
+                raise APIRequestError(
+                    f"Failed to {method} {url}: HTTP {response.status_code}",
+                    status_code=response.status_code,
+                )
 
+        except HerdsError:
+            raise
         except Exception as e:
             OutputFormatter.print_error(f"API request failed: {e}")
-            sys.exit(1)
+            raise APIRequestError(f"API request failed: {e}")
 
 
 class APIResponseHandler:
@@ -247,7 +259,7 @@ def get_or_detect_session_email(
 ):
     """Get email from parameter or auto-detect from existing sessions.
 
-    Returns the email to use, or exits with error if no valid session found.
+    Returns the email to use, or raises NoSessionsError/AmbiguousSessionError.
     """
     if email:
         return email
@@ -256,7 +268,7 @@ def get_or_detect_session_email(
     if len(sessions) == 0:
         OutputFormatter.print_error("No active sessions found. Please login first.")
         OutputFormatter.print_info("Run: herds user login")
-        sys.exit(1)
+        raise NoSessionsError()
     elif len(sessions) == 1:
         email = sessions[0]["email"]
         OutputFormatter.print_info(f"Auto-detected session: {email}")
@@ -300,27 +312,28 @@ def get_or_detect_session_email(
                 "  # Or use: export HERDS_DEFAULT_ACCOUNT=your@email.com"
             )
 
-        sys.exit(1)
+        emails = [s["email"] for s in sessions]
+        raise AmbiguousSessionError(emails)
 
 
 def validate_session_exists(session_manager, email):
     """Validate that a session exists for the given email.
 
-    Returns session_data dict, or exits with error if session not found.
+    Returns session_data dict, or raises SessionNotFoundError.
     """
     session_data = session_manager.load_session(email)
     if not session_data:
         OutputFormatter.print_error(
             f"No session found for {email}. Please login first."
         )
-        sys.exit(1)
+        raise SessionNotFoundError(email)
     return session_data
 
 
 def extract_user_id_from_session(session_manager, email):
     """Extract user_id from session data.
 
-    Returns user_id string, or exits with error if not found.
+    Returns user_id string, or raises UserIdNotFoundError.
     """
     session_data = session_manager.load_session(email)
     if session_data and "user_data" in session_data:
@@ -332,7 +345,7 @@ def extract_user_id_from_session(session_manager, email):
     OutputFormatter.print_error(
         "Could not determine user ID from session. Please specify --user-id"
     )
-    sys.exit(1)
+    raise UserIdNotFoundError(email)
 
 
 def display_events_summary(events):
