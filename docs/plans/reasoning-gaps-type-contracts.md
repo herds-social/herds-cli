@@ -77,7 +77,7 @@ Stale copies of `get_or_detect_session_email`, `validate_session_exists`, `extra
 | cli.py:134-137 | implicit-flow | Lambda callback ensures timezone is never None; `if timezone is not None:` at line 192 is dead code | Implicit Flow |
 | cmd_calendar.py:211,241,304 | structural | Three commands call private `_make_request` directly (non-200 success codes) | Structure |
 | cmd_events.py:24 | documentation | Stale TODO comment "will be moved to core module later" — already done | Structure |
-| __main__.py | documentation | No module docstring for `python -m herds_cli` entry point | Structure |
+| `__main__.py` | documentation | No module docstring for `python -m herds_cli` entry point | Structure |
 | api.py:389-396 | documentation | `get_events_by_user` double-encodes params without explaining the split | Structure |
 
 ## Interventions
@@ -261,10 +261,27 @@ Use `ClientType` in `api.py:login()` signature and session data. Use `SessionDat
 
 ## Recommended Execution Order
 
-1. **Intervention #4** (remove dead code, add `-> NoReturn`) — immediate cleanup, zero risk
-2. **Intervention #5** (document implicit contracts) — low effort, immediate AI-readability improvement
-3. **Intervention #1** (HerdsContext TypedDict) — highest-leverage single change
-4. **Intervention #2** (type annotations on core/base.py) — systematic, pairs well with #1
-5. **Intervention #3** (typed models for session/event data) — most effort, biggest long-term payoff
+1. ~~**Intervention #4** (remove dead code, add `-> NoReturn`)~~ — **DONE** (2026-04-06)
+   - Deleted duplicate helpers from cmd_events.py (lines 416-591)
+   - Deleted stale TODO comments from cmd_events.py and cmd_event_user_data.py
+   - Added `-> NoReturn` to `api.py:handle_api_error`
+2. ~~**Intervention #5** (document implicit contracts)~~ — **DONE** (2026-04-06)
+   - Updated docstrings on APIClient, Config, SessionManager, HerdsError, GoogleOAuthFlow
+3. ~~**Intervention #1** (HerdsContext TypedDict)~~ — **DONE** (2026-04-06)
+   - Defined `HerdsContext(TypedDict)` in `core/base.py`
+   - Typed `CommandBase.__init__(ctx: click.Context)` with attribute annotations
+   - Updated `cli.py` to build ctx.obj via typed `herds_ctx: HerdsContext` dict
+   - Exported `HerdsContext` from `core/__init__.py`
+4. ~~**Intervention #2** (type annotations on core/base.py)~~ — **DONE** (2026-04-07)
+   - Annotated all 13 public methods/functions: CommandBase (5), APIResponseHandler (2), EventCommandBase (1), ImageCommandBase (1), standalone helpers (4)
+   - Added `requests`, `Optional`, `Any`, `Dict`, `List` imports
+   - Updated docstrings to reference exceptions instead of "exits with error"
+5. ~~**Intervention #3** (typed models for session/event data)~~ — **DONE** (2026-04-07)
+   - Created `herds_cli/types.py` with `ClientType`, `SessionData`, `TokenData`, `SessionUserData`, `SessionListEntry`, `EventV2`, `DateInfo`, `LocationInfo`, `ContactInfo`, `EventUserData`
+   - Updated `sessions.py`: `load_session() -> Optional[SessionData]`, `list_sessions() -> List[SessionListEntry]`
+   - Updated `api.py`: `login(client_type: Literal["web", "mobile"])` (inline Literal to avoid circular import through `core/__init__.py`)
+   - Updated `core/base.py`: `display_event_details(event_data: EventV2)`, `display_events_summary(events: List[EventV2])`, `validate_session -> SessionData`
+   - Exported types from `core/__init__.py` for convenience
+   - Note: types.py placed at `herds_cli/types.py` (not `core/types.py`) to avoid circular imports — `api.py` and `sessions.py` cannot import from `core/` because `core/__init__.py` eagerly imports `core/base.py` which imports them back
 
-Interventions 1-2 and 4-5 can each be done in a single PR. Intervention 3 is best done as a standalone PR due to its breadth.
+All 5 interventions complete. Overall AI reasoning gap score estimated to improve from 4.9/10 (C) to ~7-8/10 (B).

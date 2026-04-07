@@ -9,7 +9,9 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Dict, Any, List, Optional
+
+from herds_cli.types import SessionData, SessionListEntry
 
 from rich.console import Console
 
@@ -84,7 +86,7 @@ class SessionManager:
         except Exception as e:
             raise Exception(f"Failed to save session: {e}")
 
-    def load_session(self, email: str) -> Optional[Dict[str, Any]]:
+    def load_session(self, email: str) -> Optional[SessionData]:
         """Load session data for a specific email."""
         filename = self.get_session_filename(email)
 
@@ -113,7 +115,7 @@ class SessionManager:
                 return False
         return False
 
-    def list_sessions(self) -> list:
+    def list_sessions(self) -> List[SessionListEntry]:
         """List all available session files."""
         sessions = []
         for file_path in self.base_dir.glob("herds_session_*"):

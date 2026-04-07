@@ -7,7 +7,7 @@ HTTP client for interacting with the Herds API with session management.
 import requests
 import time
 import json
-from typing import Dict, Any, NoReturn, Optional
+from typing import Dict, Any, Literal, NoReturn, Optional
 from urllib.parse import urlencode
 
 from .sessions import SessionManager
@@ -207,7 +207,7 @@ class APIClient:
         return response
 
     def login(
-        self, email: str, password: str, client_type: str = "web"
+        self, email: str, password: str, client_type: Literal["web", "mobile"] = "web"
     ) -> Dict[str, Any]:
         """Authenticate with the API and save session."""
         url = f"{self.base_url}/api/users/login"
