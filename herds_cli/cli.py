@@ -17,6 +17,7 @@ from .api import APIClient
 from .sessions import SessionManager, HERDS_DIR
 from .images import ImageUploader
 from .output import OutputFormatter
+from .core.base import HerdsContext
 from .core.config import Config
 from .core.exceptions import HerdsError
 from .commands import (
@@ -201,9 +202,6 @@ def cli(
             OutputFormatter.print_error(f"  - {error}")
         sys.exit(1)
 
-    # Store config in context
-    ctx.obj["config"] = config_obj
-
     # Print current configuration summary
     if config_obj.verbose:
         OutputFormatter.display_configuration(config_obj)
@@ -220,15 +218,18 @@ def cli(
     )
     image_uploader = ImageUploader(api_client, session_manager)
 
-    ctx.obj["session_manager"] = session_manager
-    ctx.obj["api_client"] = api_client
-    ctx.obj["image_uploader"] = image_uploader
-    ctx.obj["output_formatter"] = OutputFormatter()
-
-    # Store individual config values for backward compatibility
-    ctx.obj["timezone"] = config_obj.timezone
-    ctx.obj["format"] = config_obj.output_format
-    ctx.obj["base_url"] = config_obj.api_url
+    # Build typed context — see HerdsContext in core/base.py for schema
+    herds_ctx: HerdsContext = {
+        "config": config_obj,
+        "session_manager": session_manager,
+        "api_client": api_client,
+        "image_uploader": image_uploader,
+        "output_formatter": OutputFormatter(),
+        "timezone": config_obj.timezone,
+        "format": config_obj.output_format,
+        "base_url": config_obj.api_url,
+    }
+    ctx.obj.update(herds_ctx)
 
 
 # Register command groups

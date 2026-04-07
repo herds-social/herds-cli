@@ -5,7 +5,7 @@ This module contains shared base classes, configuration management,
 and utilities used across all command modules.
 """
 
-from .base import CommandBase, APIResponseHandler, EventCommandBase, ImageCommandBase
+from .base import CommandBase, APIResponseHandler, EventCommandBase, ImageCommandBase, HerdsContext
 from .config import Config
 from .exceptions import (
     AmbiguousSessionError,
@@ -22,6 +22,7 @@ __all__ = [
     "APIResponseHandler",
     "EventCommandBase",
     "ImageCommandBase",
+    "HerdsContext",
     "Config",
     "AmbiguousSessionError",
     "APIRequestError",

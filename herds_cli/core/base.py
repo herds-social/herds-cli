@@ -5,7 +5,12 @@ This module contains shared base classes and helper functions used across
 all command modules.
 """
 
+from typing import TypedDict
+
+import click
+
 from herds_cli.api import APIClient
+from herds_cli.core.config import Config
 from herds_cli.core.exceptions import (
     AmbiguousSessionError,
     APIRequestError,
@@ -15,18 +20,40 @@ from herds_cli.core.exceptions import (
     SessionNotFoundError,
     UserIdNotFoundError,
 )
+from herds_cli.images import ImageUploader
 from herds_cli.output import OutputFormatter
+from herds_cli.sessions import SessionManager
+
+
+class HerdsContext(TypedDict):
+    """Typed schema for the Click ctx.obj dict shared by all commands.
+
+    Built by cli.cli() and consumed by CommandBase.__init__().
+
+    Tests may bypass initialization by setting ctx.obj = {"_initialized": True, ...}
+    with all required keys pre-populated. The _initialized key is not part of this
+    TypedDict because it only exists in the test-injection path.
+    """
+
+    config: Config
+    session_manager: SessionManager
+    api_client: APIClient
+    image_uploader: ImageUploader
+    output_formatter: OutputFormatter
+    timezone: str
+    format: str
+    base_url: str
 
 
 class CommandBase:
     """Base class for CLI commands with common session and API handling functionality."""
 
-    def __init__(self, ctx):
+    def __init__(self, ctx: click.Context) -> None:
         self.ctx = ctx
-        self.config = ctx.obj["config"]
-        self.session_manager = ctx.obj["session_manager"]
-        self.api_client = ctx.obj["api_client"]
-        self.output_format = self.config.output_format
+        self.config: Config = ctx.obj["config"]
+        self.session_manager: SessionManager = ctx.obj["session_manager"]
+        self.api_client: APIClient = ctx.obj["api_client"]
+        self.output_format: str = self.config.output_format
 
     def setup_session(self, email=None, show_client_type=False):
         """Get email from parameter or auto-detect from existing sessions.
@@ -145,8 +172,6 @@ class APIResponseHandler:
         if output_format != "table" or not skip_table:
             output = OutputFormatter.format_output(result, output_format)
             if output:
-                import click
-
                 click.echo(output)
 
 
@@ -294,12 +319,8 @@ def get_or_detect_session_email(
                     if full_session
                     else "unknown"
                 )
-                import click
-
                 click.echo(f"  • {session['email']} ({client_type})")
             else:
-                import click
-
                 click.echo(f"  • {session['email']}")
 
         if config and not config.default_account:
