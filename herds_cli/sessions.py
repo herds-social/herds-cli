@@ -21,7 +21,20 @@ HERDS_DIR = Path.home() / ".herds"
 
 
 class SessionManager:
-    """Manages user sessions with email-based filenames."""
+    """Manages user sessions as JSON files in ~/.herds/ (or custom base_dir).
+
+    Files are named herds_session_{sanitized_email} where:
+        @ → _at_,  + → _plus_,  . → _
+
+    Permissions are set to 0600 (owner read/write only) for security.
+
+    Each session file contains auth credentials (cookies or Bearer tokens),
+    user data, base_url, client_type ("web" or "mobile"), and metadata
+    (email, created_at, session_filename).
+
+    Note: save_session() mutates the passed-in session_data dict by adding
+    email, created_at, and session_filename keys via dict.update().
+    """
 
     def __init__(self, base_dir: Optional[str] = None):
         self.base_dir = Path(base_dir) if base_dir else HERDS_DIR

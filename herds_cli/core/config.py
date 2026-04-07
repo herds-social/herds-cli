@@ -15,7 +15,17 @@ from urllib.parse import urlparse
 
 @dataclass
 class Config:
-    """Configuration class for the Herds CLI."""
+    """Layered configuration for the Herds CLI.
+
+    Loading precedence (last wins):
+        dataclass defaults → HERDS_* env vars → JSON config file → CLI flags
+
+    The first three layers are applied by Config.load(). CLI flag overrides
+    are applied separately in cli.py after load() returns.
+
+    Internal fields (_validation_errors, _loaded_config_file) are excluded
+    from serialization by save() but ARE included by to_dict()/asdict().
+    """
 
     # API settings
     api_url: str = "http://localhost:8000"

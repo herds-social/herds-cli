@@ -7,14 +7,29 @@ HTTP client for interacting with the Herds API with session management.
 import requests
 import time
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, NoReturn, Optional
 from urllib.parse import urlencode
 
 from .sessions import SessionManager
 
 
 class APIClient:
-    """HTTP client for interacting with the Herds API."""
+    """HTTP client for the Herds API with dual auth support.
+
+    Supports two authentication modes determined at login time:
+    - **web**: cookie-based (access_token/refresh_token set on requests.Session.cookies)
+    - **mobile**: Bearer token (Authorization header set on requests.Session.headers)
+
+    Authenticated methods call load_session_auth(email) internally to load
+    credentials from SessionManager before making requests. This mutates
+    the shared requests.Session — headers and cookies persist across calls.
+
+    All error responses go through handle_api_error(), which always raises
+    (typed -> NoReturn). The else branches in API methods are therefore
+    terminal — the declared Dict[str, Any] return type is correct.
+
+    Debug logging (request/response details) is controlled by debug_requests.
+    """
 
     def __init__(
         self,
@@ -521,7 +536,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def handle_api_error(self, response: requests.Response):
+    def handle_api_error(self, response: requests.Response) -> NoReturn:
         """Handle API error responses."""
         try:
             error_data = response.json()

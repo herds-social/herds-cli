@@ -7,7 +7,14 @@ decisions at the CLI command boundary where they belong.
 
 
 class HerdsError(Exception):
-    """Base exception for all Herds CLI domain errors."""
+    """Base exception for all Herds CLI domain errors.
+
+    Contract: callers MUST print a user-friendly error message (via
+    OutputFormatter.print_error) BEFORE raising a HerdsError subclass.
+    HerdsGroup.invoke() in cli.py catches HerdsError and calls sys.exit(1)
+    without printing anything — it relies on the message already being
+    displayed. Raising without printing first causes a silent exit.
+    """
 
 
 class NoSessionsError(HerdsError):
