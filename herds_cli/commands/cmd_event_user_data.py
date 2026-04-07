@@ -21,7 +21,6 @@ def event_user_data():
     pass
 
 
-# Base classes for command handling (will be moved to core module later)
 @event_user_data.command("update")
 @click.option("--event-id", required=True, help="Event ID")
 @click.option("--user-id", help="User ID (autodetected from session if not provided)")

@@ -79,7 +79,24 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
 
 
 class GoogleOAuthFlow:
-    """Handles Google OAuth flow for CLI authentication."""
+    """Interactive Google OAuth flow using a local HTTP callback server.
+
+    Accepts a config object with attributes:
+        - google_client_id (str): OAuth client ID from Google Cloud Console
+        - google_client_secret (str): OAuth client secret
+        - google_redirect_uri (str, optional): defaults to http://localhost:8080/callback
+
+    There is no formal Protocol for this config — cmd_user.py creates an
+    ad-hoc OAuthConfig class inline. Falls back to HERDS_GOOGLE_* env vars
+    if no config is provided.
+
+    Flow: starts local HTTP server on port 8080 → opens browser for Google
+    consent → receives auth code on /callback → exchanges code for ID token
+    via Google's token endpoint. Times out after 5 minutes.
+
+    Port 8080 must match the redirect_uri registered in Google Cloud Console.
+    If the port is in use, the OAuth flow will fail with an OSError.
+    """
 
     def __init__(self, config=None):
         # Google OAuth configuration

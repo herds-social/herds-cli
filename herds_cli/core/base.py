@@ -5,7 +5,14 @@ This module contains shared base classes and helper functions used across
 all command modules.
 """
 
+from typing import Any, Dict, List, Optional, TypedDict
+
+import click
+import requests
+
 from herds_cli.api import APIClient
+from herds_cli.core.config import Config
+from herds_cli.types import EventV2, SessionData
 from herds_cli.core.exceptions import (
     AmbiguousSessionError,
     APIRequestError,
@@ -15,43 +22,65 @@ from herds_cli.core.exceptions import (
     SessionNotFoundError,
     UserIdNotFoundError,
 )
+from herds_cli.images import ImageUploader
 from herds_cli.output import OutputFormatter
+from herds_cli.sessions import SessionManager
+
+
+class HerdsContext(TypedDict):
+    """Typed schema for the Click ctx.obj dict shared by all commands.
+
+    Built by cli.cli() and consumed by CommandBase.__init__().
+
+    Tests may bypass initialization by setting ctx.obj = {"_initialized": True, ...}
+    with all required keys pre-populated. The _initialized key is not part of this
+    TypedDict because it only exists in the test-injection path.
+    """
+
+    config: Config
+    session_manager: SessionManager
+    api_client: APIClient
+    image_uploader: ImageUploader
+    output_formatter: OutputFormatter
+    timezone: str
+    format: str
+    base_url: str
 
 
 class CommandBase:
     """Base class for CLI commands with common session and API handling functionality."""
 
-    def __init__(self, ctx):
+    def __init__(self, ctx: click.Context) -> None:
         self.ctx = ctx
-        self.config = ctx.obj["config"]
-        self.session_manager = ctx.obj["session_manager"]
-        self.api_client = ctx.obj["api_client"]
-        self.output_format = self.config.output_format
+        self.config: Config = ctx.obj["config"]
+        self.session_manager: SessionManager = ctx.obj["session_manager"]
+        self.api_client: APIClient = ctx.obj["api_client"]
+        self.output_format: str = self.config.output_format
 
-    def setup_session(self, email=None, show_client_type=False):
+    def setup_session(self, email: Optional[str] = None, show_client_type: bool = False) -> str:
         """Get email from parameter or auto-detect from existing sessions.
 
-        Returns the email to use, or exits with error if no valid session found.
+        Returns the email to use, or raises NoSessionsError/AmbiguousSessionError.
         """
         return get_or_detect_session_email(
             self.session_manager, email, show_client_type, self.config
         )
 
-    def validate_session(self, email):
+    def validate_session(self, email: str) -> SessionData:
         """Validate that a session exists for the given email.
 
-        Returns session_data dict, or exits with error if session not found.
+        Returns session_data dict, or raises SessionNotFoundError.
         """
         return validate_session_exists(self.session_manager, email)
 
-    def extract_user_id(self, email):
+    def extract_user_id(self, email: str) -> str:
         """Extract user_id from session data.
 
-        Returns user_id string, or exits with error if not found.
+        Returns user_id string, or raises UserIdNotFoundError.
         """
         return extract_user_id_from_session(self.session_manager, email)
 
-    def load_session_auth(self, email):
+    def load_session_auth(self, email: str) -> bool:
         """Load session authentication for API requests.
 
         Returns True if successful, raises AuthenticationError if failed.
@@ -63,7 +92,9 @@ class CommandBase:
             raise AuthenticationError(email)
         return True
 
-    def execute_api_request(self, method, url, success_msg=None, **kwargs):
+    def execute_api_request(
+        self, method: str, url: str, success_msg: Optional[str] = None, **kwargs: Any
+    ) -> Dict[str, Any]:
         """Execute an API request with standardized error handling.
 
         Args:
@@ -101,7 +132,7 @@ class APIResponseHandler:
     """Utility class for standardized API response handling."""
 
     @staticmethod
-    def handle_error_response(response, operation_name):
+    def handle_error_response(response: requests.Response, operation_name: str) -> None:
         """Handle HTTP error responses with consistent formatting."""
         try:
             error_data = response.json()
@@ -132,7 +163,7 @@ class APIResponseHandler:
         OutputFormatter.print_error(f"Failed to {operation_name}: {error_msg}")
 
     @staticmethod
-    def format_and_output(result, output_format, skip_table=False):
+    def format_and_output(result: Any, output_format: str, skip_table: bool = False) -> None:
         """Format and output response data.
 
         Args:
@@ -145,15 +176,13 @@ class APIResponseHandler:
         if output_format != "table" or not skip_table:
             output = OutputFormatter.format_output(result, output_format)
             if output:
-                import click
-
                 click.echo(output)
 
 
 class EventCommandBase(CommandBase):
     """Base class for event-related commands with common event display logic."""
 
-    def display_event_details(self, event_data):
+    def display_event_details(self, event_data: EventV2) -> None:
         """Extract and display event information consistently."""
         title = event_data.get("title", "Untitled")
         category = event_data.get("category_level_1", "Unknown category")
@@ -221,7 +250,7 @@ class EventCommandBase(CommandBase):
 class ImageCommandBase(CommandBase):
     """Base class for image-related commands with common image display logic."""
 
-    def display_image_summary(self, image_data):
+    def display_image_summary(self, image_data: Dict[str, Any]) -> None:
         """Extract and display image information consistently."""
         OutputFormatter.print_info(f"Image Name: {image_data.get('image_name', 'N/A')}")
         OutputFormatter.print_info(
@@ -255,8 +284,11 @@ class ImageCommandBase(CommandBase):
 
 # Shared utility functions
 def get_or_detect_session_email(
-    session_manager, email, show_client_type=False, config=None
-):
+    session_manager: SessionManager,
+    email: Optional[str],
+    show_client_type: bool = False,
+    config: Optional[Config] = None,
+) -> str:
     """Get email from parameter or auto-detect from existing sessions.
 
     Returns the email to use, or raises NoSessionsError/AmbiguousSessionError.
@@ -294,12 +326,8 @@ def get_or_detect_session_email(
                     if full_session
                     else "unknown"
                 )
-                import click
-
                 click.echo(f"  • {session['email']} ({client_type})")
             else:
-                import click
-
                 click.echo(f"  • {session['email']}")
 
         if config and not config.default_account:
@@ -316,7 +344,7 @@ def get_or_detect_session_email(
         raise AmbiguousSessionError(emails)
 
 
-def validate_session_exists(session_manager, email):
+def validate_session_exists(session_manager: SessionManager, email: str) -> SessionData:
     """Validate that a session exists for the given email.
 
     Returns session_data dict, or raises SessionNotFoundError.
@@ -330,7 +358,7 @@ def validate_session_exists(session_manager, email):
     return session_data
 
 
-def extract_user_id_from_session(session_manager, email):
+def extract_user_id_from_session(session_manager: SessionManager, email: str) -> str:
     """Extract user_id from session data.
 
     Returns user_id string, or raises UserIdNotFoundError.
@@ -348,7 +376,7 @@ def extract_user_id_from_session(session_manager, email):
     raise UserIdNotFoundError(email)
 
 
-def display_events_summary(events):
+def display_events_summary(events: List[EventV2]) -> None:
     """Display a formatted summary of events.
 
     Args:
