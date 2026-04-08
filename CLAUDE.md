@@ -23,39 +23,28 @@ There are no tests in this repo currently.
 
 ## Architecture
 
-### Entry Point
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full domain map: module descriptions, dependency flow, layer diagram, and key interfaces.
 
-`herds_cli/cli.py` — The Click root group. Sets up the shared context (`ctx.obj`) that every subcommand depends on:
-- Loads `Config` (file → env vars → CLI flags, last wins)
-- Creates `SessionManager`, `APIClient`, `ImageUploader`, `OutputFormatter`
-- Stores them in `ctx.obj` for subcommands to consume
-
-### Core Components
-
-- **`core/config.py`** — `Config` dataclass. Layered loading: defaults → env vars (`HERDS_*`) → JSON file → CLI flags. Validates URL, timeout, timezone, email format.
-- **`core/base.py`** — `CommandBase` / `EventCommandBase` / `ImageCommandBase` — base classes that commands inherit from. Provides `setup_session()` (auto-detect email from `~/.herds/` sessions), `extract_user_id()`, `execute_api_request()`, and standardized display methods. Also has standalone helpers: `get_or_detect_session_email()`, `validate_session_exists()`.
-- **`api.py`** — `APIClient`. Wraps `requests.Session` with auth loading (cookies for web, Bearer token for mobile), debug logging, and all API endpoint methods. Every authenticated method calls `load_session_auth(email)` first.
-- **`sessions.py`** — `SessionManager`. Stores sessions as JSON files in `~/.herds/` with `0600` permissions. Email-based filenames (`herds_session_user_at_example_com`).
-- **`images.py`** — `ImageUploader`. File validation, MIME type detection, multipart upload to `/api/images/v2/upload`.
-- **`output.py`** — `OutputFormatter`. JSON or Rich table output. Static methods for success/error/warning/info messages.
-- **`oauth.py`** — `GoogleOAuthFlow`. Spins up a local HTTP server on port 8080, opens the browser for Google OAuth, exchanges the code for an ID token.
-
-### Command Modules (`commands/`)
-
-Each file is a Click command group registered in `cli.py`:
-- `cmd_user.py` — login, logout, create-user, whoami, sessions, Google OAuth login
-- `cmd_image.py` — upload, get, detections, in-progress, delete
-- `cmd_events.py` — list (with date filters/sorting), get, update, delete, by-image
-- `cmd_event_user_data.py` — get/update/delete calendar integration data per event
-- `cmd_config.py` — show, validate, set, save, reset
-- `cmd_user_settings.py` — get/update user preferences
-- `cmd_calendar.py` — connect (Google/Outlook OAuth), status, list calendars
+**Quick orientation:**
+- Entry point: `herds_cli/cli.py` (Click root group, context setup)
+- Commands: `herds_cli/commands/cmd_*.py` (one file per command group)
+- Core: `core/base.py` (command base classes), `core/config.py` (Config), `core/exceptions.py` (HerdsError hierarchy)
+- Clients: `api.py` (HTTP), `sessions.py` (persistence), `images.py` (uploads), `oauth.py` (Google OAuth)
+- Types: `types.py` (TypedDicts — pure leaf, no project imports)
 
 ### Key Patterns
 
-- **Auth flow**: Commands call `CommandBase.setup_session(email)` to resolve which account to use (explicit `--email`, single session auto-detect, or `--account`/`HERDS_DEFAULT_ACCOUNT`). Then `APIClient.load_session_auth(email)` loads cookies or Bearer token.
-- **Two client types**: `web` (cookie-based) and `mobile` (Bearer token). Determined at login time via `--client-type`.
+- **Auth**: Two client types — `web` (cookies) and `mobile` (Bearer token). Resolved via `CommandBase.setup_session()` → `APIClient.load_session_auth()`.
+- **Errors**: Helpers print a message then raise `HerdsError`. `HerdsGroup` at CLI boundary catches and exits.
 - **Output**: All commands respect `--format json|table`. JSON is default.
+
+## Documentation
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Module map, dependency flow, layer diagram, key interfaces
+- **[docs/design-docs/](docs/design-docs/)** — Architecture Decision Records (ADRs)
+- **[docs/exec-plans/active/](docs/exec-plans/active/)** — Current execution plans
+- **[docs/exec-plans/completed/](docs/exec-plans/completed/)** — Finished plans for reference
+- **[docs/references/](docs/references/)** — External docs (Google Auth setup, Homebrew distribution)
 
 ## Release
 
