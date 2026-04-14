@@ -5,15 +5,80 @@ This module contains commands for user authentication, account management,
 and session handling.
 """
 
+import json
+
 import click
 import getpass
 import sys
+from typing import Optional
 
 from herds_cli.output import OutputFormatter
 from herds_cli.core.base import (
     get_or_detect_session_email,
     validate_session_exists,
 )
+from herds_cli.core.config import Config
+
+_DEFAULT_REDIRECT_URI = "http://localhost:8080/callback"
+
+
+def _load_google_oauth_credentials(
+    config: Optional[Config] = None,
+) -> tuple[str, str, str]:
+    """Load Google OAuth credentials from config file or CLI config.
+
+    Checks ./herds-google-oauth-config.json first, then falls back to
+    the CLI Config object (which reads HERDS_GOOGLE_CLIENT_* env vars).
+
+    Returns:
+        (client_id, client_secret, redirect_uri)
+
+    Raises:
+        SystemExit: if credentials cannot be resolved from any source.
+    """
+    google_client_id: Optional[str] = None
+    google_client_secret: Optional[str] = None
+    google_redirect_uri = _DEFAULT_REDIRECT_URI
+
+    # Try the standalone Google OAuth JSON file first
+    try:
+        with open("./herds-google-oauth-config.json", "r") as f:
+            google_config = json.load(f)
+        if "installed" in google_config:
+            installed = google_config["installed"]
+            google_client_id = installed.get("client_id")
+            google_client_secret = installed.get("client_secret")
+            if installed.get("redirect_uris"):
+                redirect_uri = installed["redirect_uris"][0]
+                if redirect_uri == "http://localhost":
+                    google_redirect_uri = _DEFAULT_REDIRECT_URI
+                else:
+                    google_redirect_uri = redirect_uri
+    except FileNotFoundError:
+        pass  # Will check general config below
+
+    # Fall back to general CLI config if JSON file didn't have credentials
+    if not google_client_id and config:
+        google_client_id = config.google_client_id
+    if not google_client_secret and config:
+        google_client_secret = config.google_client_secret
+
+    if not google_client_id or not google_client_secret:
+        OutputFormatter.print_error(
+            "Google OAuth not configured. Please set HERDS_GOOGLE_CLIENT_ID and "
+            "HERDS_GOOGLE_CLIENT_SECRET environment variables, or configure them "
+            "in your herds-google-oauth-config.json file."
+        )
+        OutputFormatter.print_info(
+            "Example configuration:\n"
+            "{\n"
+            '  "google_client_id": "your_google_client_id",\n'
+            '  "google_client_secret": "your_google_client_secret"\n'
+            "}"
+        )
+        sys.exit(1)
+
+    return google_client_id, google_client_secret, google_redirect_uri
 
 
 @click.group()
@@ -136,53 +201,10 @@ def login_google(ctx):
         OutputFormatter.print_info("Starting Google OAuth flow...")
         OutputFormatter.print_info("Your browser will open for Google sign-in.")
 
-        # Load Google OAuth credentials from the separate JSON file
-        google_config = None
-        try:
-            import json
-
-            with open("./herds-google-oauth-config.json", "r") as f:
-                google_config = json.load(f)
-        except FileNotFoundError:
-            pass  # Will check general config below
-
-        # Extract credentials from Google OAuth format
-        google_client_id = None
-        google_client_secret = None
-        google_redirect_uri = "http://localhost:8080/callback"
-
-        if google_config and "installed" in google_config:
-            installed = google_config["installed"]
-            google_client_id = installed.get("client_id")
-            google_client_secret = installed.get("client_secret")
-            if installed.get("redirect_uris"):
-                redirect_uri = installed["redirect_uris"][0]
-                if redirect_uri == "http://localhost":
-                    google_redirect_uri = "http://localhost:8080/callback"
-                else:
-                    google_redirect_uri = redirect_uri
-
-        # Fall back to general CLI config if Google OAuth config doesn't have credentials
         config = ctx.obj.get("config")
-        if not google_client_id and config:
-            google_client_id = config.google_client_id
-        if not google_client_secret and config:
-            google_client_secret = config.google_client_secret
-
-        if not google_client_id or not google_client_secret:
-            OutputFormatter.print_error(
-                "Google OAuth not configured. Please set HERDS_GOOGLE_CLIENT_ID and "
-                "HERDS_GOOGLE_CLIENT_SECRET environment variables, or configure them "
-                "in your herds-google-oauth-config.json file."
-            )
-            OutputFormatter.print_info(
-                "Example configuration:\n"
-                "{\n"
-                '  "google_client_id": "your_google_client_id",\n'
-                '  "google_client_secret": "your_google_client_secret"\n'
-                "}"
-            )
-            sys.exit(1)
+        google_client_id, google_client_secret, google_redirect_uri = (
+            _load_google_oauth_credentials(config)
+        )
 
         # Import here to avoid circular imports
         from ..oauth import GoogleOAuthFlow, OAuthConfig

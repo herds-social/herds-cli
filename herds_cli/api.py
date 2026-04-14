@@ -626,7 +626,11 @@ class APIClient:
         google_calendar_id: Optional[str] = None,
         outlook_calendar_id: Optional[str] = None,
     ) -> EventV2:
-        """Update an event with new details and calendar integration data."""
+        """Update an event with new details and calendar integration data.
+
+        The field set here mirrors cmd_events.py:_build_event_update_data —
+        keep both in sync when adding or removing event fields.
+        """
         # Load session authentication
         if not self.load_session_auth(email):
             raise Exception(f"No valid session found for {email}. Please login first.")

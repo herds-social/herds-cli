@@ -8,10 +8,13 @@ CLI configuration.
 import click
 import sys
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import NotRequired, Optional, TypedDict
 
 from herds_cli.output import OutputFormatter
 from herds_cli.core.config import Config
+
+_LOCAL_API_URL = "http://localhost:8000"
+_PROD_API_URL = "https://api.herds.events"
 
 
 class ConfigKeyInfo(TypedDict):
@@ -67,6 +70,55 @@ CONFIG_KEYS: dict[str, ConfigKeyInfo] = {
         "current": None,
     },
 }
+
+
+def _resolve_api_url_shortcut(
+    local: bool,
+    prod: bool,
+    key: Optional[str],
+    value: Optional[str],
+) -> str:
+    """Validate --local/--prod flag combinations and return the resolved URL.
+
+    Exits with an error message if the flags are used incorrectly (both set,
+    wrong key, or a value also supplied).
+
+    Returns:
+        The resolved API URL string.
+    """
+    if local and prod:
+        OutputFormatter.print_error(
+            "Cannot use both --local and --prod flags simultaneously"
+        )
+        sys.exit(1)
+
+    if not key:
+        OutputFormatter.print_error(
+            "Environment shortcuts (--local, --prod) require specifying 'api_url' as the key"
+        )
+        OutputFormatter.print_info("Usage: herds config set api_url --local")
+        OutputFormatter.print_info("       herds config set api_url --prod")
+        sys.exit(1)
+
+    if key != "api_url":
+        OutputFormatter.print_error(
+            f"Environment shortcuts (--local, --prod) can only be used with 'api_url', not '{key}'"
+        )
+        sys.exit(1)
+
+    if value:
+        OutputFormatter.print_error(
+            "Cannot provide both an environment shortcut flag and a direct value"
+        )
+        OutputFormatter.print_info(
+            "Use either: herds config set api_url --local"
+        )
+        OutputFormatter.print_info(
+            "        or: herds config set api_url https://custom.com"
+        )
+        sys.exit(1)
+
+    return _LOCAL_API_URL if local else _PROD_API_URL
 
 
 @click.group()
@@ -295,44 +347,7 @@ def set(ctx, config_file, local, prod, key, value):
     """
     # Handle environment shortcuts (--local and --prod)
     if local or prod:
-        # Validate usage of environment shortcuts
-        if local and prod:
-            OutputFormatter.print_error(
-                "Cannot use both --local and --prod flags simultaneously"
-            )
-            sys.exit(1)
-
-        if not key:
-            OutputFormatter.print_error(
-                "Environment shortcuts (--local, --prod) require specifying 'api_url' as the key"
-            )
-            OutputFormatter.print_info("Usage: herds config set api_url --local")
-            OutputFormatter.print_info("       herds config set api_url --prod")
-            sys.exit(1)
-
-        if key != "api_url":
-            OutputFormatter.print_error(
-                f"Environment shortcuts (--local, --prod) can only be used with 'api_url', not '{key}'"
-            )
-            sys.exit(1)
-
-        if value:
-            OutputFormatter.print_error(
-                "Cannot provide both an environment shortcut flag and a direct value"
-            )
-            OutputFormatter.print_info(
-                "Use either: herds config set api_url --local"
-            )
-            OutputFormatter.print_info(
-                "        or: herds config set api_url https://custom.com"
-            )
-            sys.exit(1)
-
-        # Set the appropriate URL based on the flag
-        if local:
-            value = "http://localhost:8000"
-        elif prod:
-            value = "https://api.herds.events"
+        value = _resolve_api_url_shortcut(local, prod, key, value)
 
     # Load existing configuration from file if it exists, otherwise use current config
     try:

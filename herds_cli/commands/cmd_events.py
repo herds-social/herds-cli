@@ -7,6 +7,8 @@ This module contains commands for event CRUD operations and management.
 import click
 import sys
 
+from typing import Any, Optional
+
 from herds_cli.output import OutputFormatter
 from herds_cli.core.base import (
     APIResponseHandler,
@@ -337,60 +339,30 @@ def update_event(
 
     OutputFormatter.print_info(f"Updating event {event_id}...")
 
-    # Build request data - only include non-None values
-    data = {}
-
-    # Core event fields
-    if title is not None:
-        data["title"] = title
-    if description is not None:
-        data["description"] = description
-    if notes is not None:
-        data["notes"] = notes
-
-    # Date/time fields
-    if date_start is not None:
-        data["date_start"] = date_start
-    if date_end is not None:
-        data["date_end"] = date_end
-    if time_start is not None:
-        data["time_start"] = time_start
-    if time_end is not None:
-        data["time_end"] = time_end
-    if is_all_day is not None:
-        data["is_all_day"] = is_all_day
-
-    # Location fields
-    if street_address is not None:
-        data["street_address"] = street_address
-    if city is not None:
-        data["city"] = city
-    if state is not None:
-        data["state"] = state
-
-    # Contact fields
-    if organizer is not None:
-        data["organizer"] = organizer
-    if email_contact is not None:
-        data["email_contact"] = email_contact
-    if phone is not None:
-        data["phone"] = phone
-    if website is not None:
-        data["website"] = website
-
-    # Category fields
-    if category_level_1 is not None:
-        data["category_level_1"] = category_level_1
-    if age_demographic is not None:
-        data["age_demographic"] = age_demographic
-
-    # Calendar integration fields
-    if apple_calendar_id is not None:
-        data["apple_calendar_id"] = apple_calendar_id
-    if google_calendar_id is not None:
-        data["google_calendar_id"] = google_calendar_id
-    if outlook_calendar_id is not None:
-        data["outlook_calendar_id"] = outlook_calendar_id
+    # Build request data — see also api.py:APIClient.update_event which
+    # accepts the same field set as explicit keyword arguments.
+    data = _build_event_update_data(
+        title=title,
+        description=description,
+        notes=notes,
+        date_start=date_start,
+        date_end=date_end,
+        time_start=time_start,
+        time_end=time_end,
+        is_all_day=is_all_day,
+        street_address=street_address,
+        city=city,
+        state=state,
+        organizer=organizer,
+        email_contact=email_contact,
+        phone=phone,
+        website=website,
+        category_level_1=category_level_1,
+        age_demographic=age_demographic,
+        apple_calendar_id=apple_calendar_id,
+        google_calendar_id=google_calendar_id,
+        outlook_calendar_id=outlook_calendar_id,
+    )
 
     # Build URL and execute API request with proper error handling
     url = f"{cmd.api_client.base_url}/api/events/{event_id}"
@@ -405,6 +377,59 @@ def update_event(
 
     # Output formatted response
     APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+
+
+def _build_event_update_data(
+    *,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    notes: Optional[str] = None,
+    date_start: Optional[str] = None,
+    date_end: Optional[str] = None,
+    time_start: Optional[str] = None,
+    time_end: Optional[str] = None,
+    is_all_day: Optional[bool] = None,
+    street_address: Optional[str] = None,
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    organizer: Optional[str] = None,
+    email_contact: Optional[str] = None,
+    phone: Optional[str] = None,
+    website: Optional[str] = None,
+    category_level_1: Optional[str] = None,
+    age_demographic: Optional[str] = None,
+    apple_calendar_id: Optional[str] = None,
+    google_calendar_id: Optional[str] = None,
+    outlook_calendar_id: Optional[str] = None,
+) -> dict[str, Any]:
+    """Build the update payload from optional fields, omitting None values.
+
+    Returns a dict containing only the fields the caller explicitly provided.
+    The key names match the API's expected request body (see api.py:APIClient.update_event).
+    """
+    fields: dict[str, Any] = {
+        "title": title,
+        "description": description,
+        "notes": notes,
+        "date_start": date_start,
+        "date_end": date_end,
+        "time_start": time_start,
+        "time_end": time_end,
+        "is_all_day": is_all_day,
+        "street_address": street_address,
+        "city": city,
+        "state": state,
+        "organizer": organizer,
+        "email_contact": email_contact,
+        "phone": phone,
+        "website": website,
+        "category_level_1": category_level_1,
+        "age_demographic": age_demographic,
+        "apple_calendar_id": apple_calendar_id,
+        "google_calendar_id": google_calendar_id,
+        "outlook_calendar_id": outlook_calendar_id,
+    }
+    return {k: v for k, v in fields.items() if v is not None}
 
 
 def _display_concise_summary(events):
