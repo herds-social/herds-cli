@@ -96,11 +96,11 @@ class ImageUploader:
         file_path: str,
         email: str,
         endpoint: str = "/api/images/v2/upload",
-        timezone: str = None,
-        alg_version: str = None,
+        timezone: Optional[str] = None,
+        alg_version: Optional[str] = None,
         mock_mode: bool = False,
-        ocr_text: str = None,
-        barcode: str = None,
+        ocr_text: Optional[str] = None,
+        barcode: Optional[str] = None,
         add_to_calendar: bool = False,
     ) -> Dict[str, Any]:
         """
@@ -177,8 +177,8 @@ class ImageUploader:
         file_paths: list[str],
         email: str,
         endpoint: str = "/api/images/v2/upload",
-        timezone: str = None,
-        alg_version: str = None,
+        timezone: Optional[str] = None,
+        alg_version: Optional[str] = None,
     ) -> list[UploadResult]:
         """
         Upload multiple image files.

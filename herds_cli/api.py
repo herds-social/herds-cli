@@ -300,7 +300,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def google_auth(self, id_token: str, nonce: str = None) -> LoginResponse:
+    def google_auth(self, id_token: str, nonce: Optional[str] = None) -> LoginResponse:
         """Authenticate with Google ID token."""
         url = f"{self.base_url}/api/users/auth/google"
 
@@ -355,7 +355,7 @@ class APIClient:
         email: str,
         current_password: str,
         new_password: str,
-        refresh_token: str = None,
+        refresh_token: Optional[str] = None,
     ) -> ChangePasswordResponse:
         """Change password for authenticated user (requires current password verification)."""
         # Load session authentication
