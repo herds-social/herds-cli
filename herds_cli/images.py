@@ -2,6 +2,9 @@
 Herds CLI Image Management Module
 
 Handles image upload functionality with session-based authentication.
+
+Note: imports APIResponseHandler lazily inside upload_image() to avoid a
+circular dependency (core/base.py imports ImageUploader from this module).
 """
 
 import os

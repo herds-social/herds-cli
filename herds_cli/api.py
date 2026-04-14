@@ -1,7 +1,17 @@
 """
-Herds CLI API Client Module
+HTTP client for the Herds API.
 
-HTTP client for interacting with the Herds API with session management.
+Provides authenticated REST methods for users, events, images, and
+event-user-data.  Two auth modes (web=cookies, mobile=Bearer token) are
+resolved by load_session_auth().  Most methods call load_session_auth(email)
+internally.
+
+Exceptions: login(), create_user(), and google_auth() authenticate directly
+and do not require a prior session.
+
+All error paths go through handle_api_error() which always raises (NoReturn).
+
+Used by CommandBase (core/base.py) and ImageUploader (images.py).
 """
 
 import requests

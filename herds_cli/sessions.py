@@ -2,6 +2,9 @@
 Herds CLI Session Management Module
 
 Manages user sessions with email-based filenames for secure local storage.
+
+Exports HERDS_DIR (~/.herds/), which is also imported by cli.py as the
+default config file directory.
 """
 
 import json

@@ -48,7 +48,13 @@ class HerdsContext(TypedDict):
 
 
 class CommandBase:
-    """Base class for CLI commands with common session and API handling functionality."""
+    """Shared helper for CLI commands providing session resolution, auth loading,
+    and API request execution.
+
+    Instantiated per-command as ``cmd = CommandBase(ctx)``.  Subclasses
+    EventCommandBase and ImageCommandBase add domain-specific display methods.
+    Not subclassed by individual command functions — they use it by composition.
+    """
 
     def __init__(self, ctx: click.Context) -> None:
         self.ctx = ctx
