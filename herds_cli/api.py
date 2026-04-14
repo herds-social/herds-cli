@@ -10,7 +10,19 @@ import json
 from typing import Any, Dict, List, Literal, NoReturn, Optional, overload
 
 from .sessions import SessionManager
-from .types import EventV2, LoginResponse, SessionData, UserResponse
+from .types import (
+    ChangePasswordResponse,
+    CreateUserResponse,
+    DeleteEventResponse,
+    DeleteImageResponse,
+    EventUserDataResponse,
+    EventV2,
+    LoginResponse,
+    SessionData,
+    UpdatePasswordResponse,
+    UsageResponse,
+    UserResponse,
+)
 
 
 class APIClient:
@@ -270,7 +282,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def create_user(self, email: str, password: str) -> Dict[str, Any]:
+    def create_user(self, email: str, password: str) -> CreateUserResponse:
         """Create a new user account."""
         url = f"{self.base_url}/api/users/create-user"
 
@@ -323,7 +335,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def update_password(self, email: str, new_password: str) -> Dict[str, Any]:
+    def update_password(self, email: str, new_password: str) -> UpdatePasswordResponse:
         """Update password for authenticated user (password reset flow)."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -344,7 +356,7 @@ class APIClient:
         current_password: str,
         new_password: str,
         refresh_token: str = None,
-    ) -> Dict[str, Any]:
+    ) -> ChangePasswordResponse:
         """Change password for authenticated user (requires current password verification)."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -384,7 +396,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def get_current_usage(self, email: str) -> Dict[str, Any]:
+    def get_current_usage(self, email: str) -> UsageResponse:
         """Get current usage statistics for the authenticated user."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -491,7 +503,7 @@ class APIClient:
         google_calendar_id: Optional[str],
         outlook_calendar_id: Optional[str] = None,
         no_login: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> EventUserDataResponse:
         """Update event user data with calendar integration IDs."""
         # Load session authentication (skip when no_login=True)
         if not no_login and not self.load_session_auth(email):
@@ -524,7 +536,7 @@ class APIClient:
 
     def get_event_user_data(
         self, email: str, event_id: str, user_id: str
-    ) -> Dict[str, Any]:
+    ) -> EventUserDataResponse:
         """Get all user data for a specific event."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -587,7 +599,7 @@ class APIClient:
         else:
             raise Exception(f"API error ({response.status_code}): {detail}")
 
-    def delete_image(self, email: str, image_id: str) -> Dict[str, Any]:
+    def delete_image(self, email: str, image_id: str) -> DeleteImageResponse:
         """Delete an image by ID."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -700,7 +712,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def delete_event(self, email: str, event_id: str) -> Dict[str, Any]:
+    def delete_event(self, email: str, event_id: str) -> DeleteEventResponse:
         """Delete an event by ID."""
         # Load session authentication
         if not self.load_session_auth(email):

@@ -215,6 +215,66 @@ EventListResponse = List[EventV2]
 """Response from GET /api/events/v2 — a JSON array of EventV2 objects."""
 
 
+class CreateUserResponse(TypedDict, total=False):
+    """Response from POST /api/users/create-user."""
+
+    user: LoginUserData
+    message: str
+
+
+class UpdatePasswordResponse(TypedDict, total=False):
+    """Response from POST /api/users/update-password."""
+
+    user_id: str
+
+
+class ChangePasswordResponse(TypedDict, total=False):
+    """Response from POST /api/users/change-password."""
+
+    user_id: str
+
+
+class UsageBucket(TypedDict, total=False):
+    """Usage count with limit for a time period."""
+
+    used: int
+    limit: int
+
+
+class UsageResponse(TypedDict, total=False):
+    """Response from GET /api/users/me/usage."""
+
+    tier: str
+    monthly: UsageBucket
+    total: UsageBucket
+
+
+class EventUserDataResponse(TypedDict, total=False):
+    """Response from POST/GET /api/event-user-data."""
+
+    event_id: str
+    user_id: str
+    apple_calendar_id: Optional[str]
+    google_calendar_id: Optional[str]
+    outlook_calendar_id: Optional[str]
+    updated_at: str
+    created_at: str
+
+
+class DeleteImageResponse(TypedDict, total=False):
+    """Response from DELETE /api/images/v2/{image_id}."""
+
+    message: str
+    image_id: str
+
+
+class DeleteEventResponse(TypedDict, total=False):
+    """Response from DELETE /api/events/{event_id}."""
+
+    message: str
+    event_id: str
+
+
 class ImageUploadResponse(TypedDict, total=False):
     """Response from POST /api/images/v2/upload, enriched client-side.
 
