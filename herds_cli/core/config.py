@@ -13,6 +13,23 @@ from dataclasses import dataclass, asdict, field
 from urllib.parse import urlparse
 
 
+# Fields that may be set from a JSON config file. This allowlist prevents
+# config files from overwriting internal state (_validation_errors, etc.)
+# or injecting unexpected attributes via hasattr-based dynamic dispatch.
+_CONFIGURABLE_KEYS: frozenset[str] = frozenset({
+    "api_url",
+    "api_timeout",
+    "output_format",
+    "verbose",
+    "debug_requests",
+    "timezone",
+    "default_account",
+    "app_api_key",
+    "config_file",
+    "session_dir",
+})
+
+
 @dataclass
 class Config:
     """Layered configuration for the Herds CLI.
@@ -130,9 +147,8 @@ class Config:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        # Apply loaded values
         for key, value in data.items():
-            if hasattr(self, key) and not key.startswith("_"):
+            if key in _CONFIGURABLE_KEYS:
                 setattr(self, key, value)
 
     def save(self, config_path: str) -> None:
