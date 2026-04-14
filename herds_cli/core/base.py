@@ -131,36 +131,53 @@ class CommandBase:
 class APIResponseHandler:
     """Utility class for standardized API response handling."""
 
+    # Shared status-code-to-message defaults for HTTP error responses.
+    _STATUS_DEFAULTS = {
+        400: "Bad request",
+        401: "Authentication required",
+        403: "Access forbidden",
+        404: "Not found",
+        429: "Rate limit exceeded",
+        500: "Internal server error",
+        502: "Bad gateway",
+        503: "Service unavailable",
+        504: "Gateway timeout",
+    }
+
     @staticmethod
-    def handle_error_response(response: requests.Response, operation_name: str) -> None:
-        """Handle HTTP error responses with consistent formatting."""
+    def format_error_message(response: requests.Response) -> str:
+        """Extract a human-readable error string from an HTTP error response.
+
+        Tries response JSON ``detail`` first, falls back to status-code
+        defaults, then raw response text.
+
+        Returns:
+            Formatted string like ``"HTTP 401: Authentication required"``.
+        """
         try:
             error_data = response.json()
             server_error_msg = error_data.get("detail")
             if not server_error_msg:
-                # Provide specific messages for common HTTP status codes
-                status_defaults = {
-                    400: "Bad request",
-                    401: "Authentication required",
-                    403: "Access forbidden",
-                    404: "Not found",
-                    429: "Rate limit exceeded",
-                    500: "Internal server error",
-                    502: "Bad gateway",
-                    503: "Service unavailable",
-                    504: "Gateway timeout",
-                }
-                server_error_msg = status_defaults.get(
+                server_error_msg = APIResponseHandler._STATUS_DEFAULTS.get(
                     response.status_code, f"HTTP {response.status_code} error"
                 )
-            error_msg = f"HTTP {response.status_code}: {server_error_msg}"
-        except:
-            # If we can't parse JSON, include response text if available
+            return f"HTTP {response.status_code}: {server_error_msg}"
+        except Exception:
             error_msg = f"HTTP {response.status_code}"
             if response.text:
                 error_msg += f": {response.text.strip()}"
+            return error_msg
 
+    @staticmethod
+    def handle_error_response(response: requests.Response, operation_name: str) -> str:
+        """Handle HTTP error responses with consistent formatting.
+
+        Returns:
+            The formatted error message string.
+        """
+        error_msg = APIResponseHandler.format_error_message(response)
         OutputFormatter.print_error(f"Failed to {operation_name}: {error_msg}")
+        return error_msg
 
     @staticmethod
     def format_and_output(result: Any, output_format: str, skip_table: bool = False) -> None:
