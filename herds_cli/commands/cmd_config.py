@@ -65,6 +65,16 @@ CONFIG_KEYS: dict[str, ConfigKeyInfo] = {
         "description": "Default account email to use when multiple sessions exist",
         "current": None,
     },
+    "app_api_key": {
+        "type": "string",
+        "description": "Application API key (sent as X-API-Key on account creation)",
+        "current": None,
+    },
+    "config_file": {
+        "type": "path",
+        "description": "Path to CLI configuration JSON file",
+        "current": None,
+    },
     "session_dir": {
         "type": "path",
         "description": "Directory path for storing session files",

@@ -265,6 +265,7 @@ def add_event(ctx: click.Context, event_id: str, email: Optional[str]) -> None:
             cal_id = error_data.get("calendar_event_id", "")
             if cal_id:
                 OutputFormatter.print_info(f"  Calendar Event ID: {cal_id}")
+            return
         # 400 no_calendar_connection: user hasn't run 'calendar connect' yet,
         # so the server has no OAuth token for their calendar provider.
         elif response.status_code == 400 and error_type == "no_calendar_connection":
