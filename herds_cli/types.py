@@ -6,7 +6,7 @@ and has no project dependencies, so any module can import from it
 without circular dependency risk.
 """
 
-from typing import Dict, List, Literal, Optional, TypedDict
+from typing import Dict, List, Literal, Optional, TypedDict, runtime_checkable, Protocol
 
 
 # ---------------------------------------------------------------------------
@@ -15,6 +15,20 @@ from typing import Dict, List, Literal, Optional, TypedDict
 
 ClientType = Literal["web", "mobile"]
 """Valid values for the client_type field in session data and login requests."""
+
+
+@runtime_checkable
+class GoogleOAuthConfig(Protocol):
+    """Structural contract for Google OAuth configuration.
+
+    Any object with these three attributes satisfies the protocol — the
+    OAuthConfig dataclass in oauth.py, the Config object from core/config.py,
+    or an ad-hoc object in tests.
+    """
+
+    google_client_id: str
+    google_client_secret: str
+    google_redirect_uri: str
 
 
 # ---------------------------------------------------------------------------

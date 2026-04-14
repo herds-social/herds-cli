@@ -185,17 +185,12 @@ def login_google(ctx):
             sys.exit(1)
 
         # Import here to avoid circular imports
-        from ..oauth import GoogleOAuthFlow
-
-        # Create a simple object with the OAuth credentials
-        class OAuthConfig:
-            def __init__(self, client_id, client_secret, redirect_uri):
-                self.google_client_id = client_id
-                self.google_client_secret = client_secret
-                self.google_redirect_uri = redirect_uri
+        from ..oauth import GoogleOAuthFlow, OAuthConfig
 
         oauth_config = OAuthConfig(
-            google_client_id, google_client_secret, google_redirect_uri
+            google_client_id=google_client_id,
+            google_client_secret=google_client_secret,
+            google_redirect_uri=google_redirect_uri,
         )
         oauth_flow = GoogleOAuthFlow(oauth_config)
         id_token = oauth_flow.authenticate()
