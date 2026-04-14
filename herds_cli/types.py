@@ -6,7 +6,7 @@ and has no project dependencies, so any module can import from it
 without circular dependency risk.
 """
 
-from typing import Dict, List, Literal, TypedDict
+from typing import Dict, List, Literal, Optional, TypedDict
 
 
 # ---------------------------------------------------------------------------
@@ -142,3 +142,103 @@ class EventV2(TypedDict, total=False):
     location: LocationInfo
     contact: ContactInfo
     user_data: EventUserData
+
+
+# ---------------------------------------------------------------------------
+# API response schemas
+# ---------------------------------------------------------------------------
+
+class LoginUserData(TypedDict, total=False):
+    """User data embedded in login/auth responses."""
+
+    id: str
+    user_id: str
+    email: str
+    created_at: str
+
+
+class LoginResponse(TypedDict, total=False):
+    """Response from POST /api/users/login and POST /api/users/auth/google.
+
+    Mobile responses include access_token, refresh_token, and expires_in.
+    session_filename is added client-side by APIClient after saving the session.
+    """
+
+    user: LoginUserData
+    access_token: str
+    refresh_token: str
+    expires_in: int
+    session_filename: str
+
+
+class UserSettings(TypedDict, total=False):
+    """User preference settings from GET /api/users/me."""
+
+    default_calendar: Optional[str]
+    sort_by: Optional[str]
+    filter_by: Optional[str]
+
+
+class UserInfo(TypedDict, total=False):
+    """Detailed user profile from GET /api/users/me."""
+
+    id: str
+    email: str
+    sign_in_method: str
+    created_at: str
+    last_sign_in_at: str
+    email_confirmed_at: str
+    settings: UserSettings
+
+
+class UserResponse(TypedDict, total=False):
+    """Response from GET /api/users/me."""
+
+    user: UserInfo
+
+
+EventListResponse = List[EventV2]
+"""Response from GET /api/events/v2 — a JSON array of EventV2 objects."""
+
+
+class ImageUploadResponse(TypedDict, total=False):
+    """Response from POST /api/images/v2/upload, enriched client-side.
+
+    file_path and media_type are added by ImageUploader after a successful upload.
+    """
+
+    image_id: str
+    image_name: str
+    image_extraction_status: str
+    file_path: str
+    media_type: str
+
+
+class ExtractionException(TypedDict, total=False):
+    """Error details when image extraction fails."""
+
+    type: str
+    message: str
+    traceback: str
+
+
+class ImageV2Response(TypedDict, total=False):
+    """Response from GET /api/images/v2/{image_id}.
+
+    Contains image metadata, processing status, and paths to
+    original/resized/thumbnail versions stored in S3.
+    """
+
+    image_id: str
+    image_name: str
+    image_media_type: str
+    image_extraction_status: str
+    image_cost: float
+    image_created_at: str
+    image_path: str
+    resized_path: str
+    thumbnail_path: str
+    resize_status: str
+    thumbnail_status: str
+    original_size_mb: float
+    extraction_exception: ExtractionException

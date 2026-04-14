@@ -7,10 +7,11 @@ HTTP client for interacting with the Herds API with session management.
 import requests
 import time
 import json
-from typing import Dict, Any, Literal, NoReturn, Optional
+from typing import Any, Dict, List, Literal, NoReturn, Optional
 from urllib.parse import urlencode
 
 from .sessions import SessionManager
+from .types import EventV2, LoginResponse, UserResponse
 
 
 class APIClient:
@@ -208,7 +209,7 @@ class APIClient:
 
     def login(
         self, email: str, password: str, client_type: Literal["web", "mobile"] = "web"
-    ) -> Dict[str, Any]:
+    ) -> LoginResponse:
         """Authenticate with the API and save session."""
         url = f"{self.base_url}/api/users/login"
 
@@ -279,7 +280,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def google_auth(self, id_token: str, nonce: str = None) -> Dict[str, Any]:
+    def google_auth(self, id_token: str, nonce: str = None) -> LoginResponse:
         """Authenticate with Google ID token."""
         url = f"{self.base_url}/api/users/auth/google"
 
@@ -360,7 +361,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def get_current_user(self, email: str) -> Dict[str, Any]:
+    def get_current_user(self, email: str) -> UserResponse:
         """Get current user information."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -392,7 +393,7 @@ class APIClient:
 
     def get_events_by_user(
         self, email: str, user_id: str, version: str = "v2", **params
-    ) -> Dict[str, Any]:
+    ) -> List[EventV2]:
         """Get events for a specific user."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -415,7 +416,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def get_event_by_id(self, email: str, event_id: str, **params) -> Dict[str, Any]:
+    def get_event_by_id(self, email: str, event_id: str, **params) -> EventV2:
         """Get a specific event by ID."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -437,7 +438,7 @@ class APIClient:
 
     def get_events_by_image_id(
         self, email: str, image_id: str, user_id: Optional[str] = None, **params
-    ) -> Dict[str, Any]:
+    ) -> List[EventV2]:
         """Get events associated with a specific image ID."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -605,7 +606,7 @@ class APIClient:
         apple_calendar_id: Optional[str] = None,
         google_calendar_id: Optional[str] = None,
         outlook_calendar_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> EventV2:
         """Update an event with new details and calendar integration data."""
         # Load session authentication
         if not self.load_session_auth(email):

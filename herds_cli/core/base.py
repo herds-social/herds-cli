@@ -12,7 +12,7 @@ import requests
 
 from herds_cli.api import APIClient
 from herds_cli.core.config import Config
-from herds_cli.types import EventV2, SessionData
+from herds_cli.types import EventV2, ImageV2Response, SessionData
 from herds_cli.core.exceptions import (
     AmbiguousSessionError,
     APIRequestError,
@@ -250,7 +250,7 @@ class EventCommandBase(CommandBase):
 class ImageCommandBase(CommandBase):
     """Base class for image-related commands with common image display logic."""
 
-    def display_image_summary(self, image_data: Dict[str, Any]) -> None:
+    def display_image_summary(self, image_data: ImageV2Response) -> None:
         """Extract and display image information consistently."""
         OutputFormatter.print_info(f"Image Name: {image_data.get('image_name', 'N/A')}")
         OutputFormatter.print_info(
