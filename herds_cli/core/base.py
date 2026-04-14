@@ -104,7 +104,11 @@ class CommandBase:
             **kwargs: Additional arguments for _make_request
 
         Returns:
-            Parsed JSON response data on success, raises APIRequestError on error
+            Parsed JSON response data on success, raises APIRequestError on error.
+            The return type is Dict[str, Any] as a generic wrapper. Callers
+            working with specific endpoints should reference the corresponding
+            TypedDict in herds_cli/types.py for the expected response shape
+            (e.g., DeleteEventResponse, UsageResponse).
         """
         try:
             response = self.api_client._make_request(method, url, **kwargs)

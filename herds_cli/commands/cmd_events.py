@@ -15,6 +15,7 @@ from herds_cli.core.base import (
     EventCommandBase,
     display_events_summary,
 )
+from herds_cli.types import EventV2
 
 
 @click.group()
@@ -440,7 +441,7 @@ def _build_event_update_data(
     return {k: v for k, v in fields.items() if v is not None}
 
 
-def _display_concise_summary(events):
+def _display_concise_summary(events: list[EventV2]) -> None:
     """Display a concise summary of events showing title, date, and time.
 
     Args:
