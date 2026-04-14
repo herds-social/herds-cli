@@ -27,8 +27,17 @@ def _load_google_oauth_credentials(
 ) -> tuple[str, str, str]:
     """Load Google OAuth credentials from config file or CLI config.
 
-    Checks ./herds-google-oauth-config.json first, then falls back to
-    the CLI Config object (which reads HERDS_GOOGLE_CLIENT_* env vars).
+    Resolution order (first match wins):
+        1. Standalone JSON file ``./herds-google-oauth-config.json``
+           — accepts Google Cloud "installed" format or a flat
+           ``{"google_client_id": ..., "google_client_secret": ...}`` format.
+        2. Config object via ``getattr`` — reads HERDS_GOOGLE_CLIENT_ID /
+           HERDS_GOOGLE_CLIENT_SECRET env vars that Config picks up at load
+           time. ``getattr`` is used because google_client_id and
+           google_client_secret are **not** declared fields on the Config
+           dataclass; they are set dynamically from env vars, so normal
+           attribute access would raise ``AttributeError``.
+        3. Error — prints setup instructions and exits.
 
     Returns:
         (client_id, client_secret, redirect_uri)

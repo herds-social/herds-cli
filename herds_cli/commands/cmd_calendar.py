@@ -258,19 +258,28 @@ def add_event(ctx: click.Context, event_id: str, email: Optional[str]) -> None:
         error_type = error_data.get("error_type", "")
         message = error_data.get("message", "")
 
+        # 409 already_in_calendar: event was previously added to the user's
+        # calendar — safe to ignore, but surface the existing calendar ID.
         if response.status_code == 409 and error_type == "already_in_calendar":
             OutputFormatter.print_warning("Event is already in your calendar.")
             cal_id = error_data.get("calendar_event_id", "")
             if cal_id:
                 OutputFormatter.print_info(f"  Calendar Event ID: {cal_id}")
+        # 400 no_calendar_connection: user hasn't run 'calendar connect' yet,
+        # so the server has no OAuth token for their calendar provider.
         elif response.status_code == 400 and error_type == "no_calendar_connection":
             OutputFormatter.print_error(message or "No calendar connected.")
             OutputFormatter.print_info("Run 'calendar connect --provider google' (or outlook) first.")
+        # 400 no_calendar_selected: user connected a provider but hasn't
+        # chosen which calendar to write events to via 'calendar set-calendar'.
         elif response.status_code == 400 and error_type == "no_calendar_selected":
             OutputFormatter.print_error(message or "No calendar selected.")
             OutputFormatter.print_info("Run 'calendar set-calendar --calendar-id <ID>' first.")
+        # 502 calendar_provider_error: the upstream calendar API (Google/Outlook)
+        # returned an error — transient or permissions-related.
         elif response.status_code == 502 and error_type == "calendar_provider_error":
             OutputFormatter.print_error(message or "Calendar provider error.")
+        # 404: the event_id doesn't match any event in the Herds database.
         elif response.status_code == 404:
             OutputFormatter.print_error("Event not found.")
         else:

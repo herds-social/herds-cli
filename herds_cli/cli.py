@@ -135,6 +135,9 @@ def validate_timezone(timezone: str) -> str:
     is_flag=True,
     help="Show detailed HTTP request/response information (overrides config)",
 )
+# When --timezone is omitted, detect_system_timezone() runs as the Click
+# callback default, so config_obj.timezone is always a valid IANA string
+# (e.g. "America/New_York") by the time any command executes.
 @click.option(
     "--timezone",
     help="Timezone for datetime operations (auto-detected if not specified, overrides config)",
