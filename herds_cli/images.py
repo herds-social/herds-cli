@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional
 
 from .api import APIClient
 from .sessions import SessionManager
+from .types import UploadResult
 
 
 class ImageUploader:
@@ -196,12 +197,12 @@ class ImageUploader:
 
     def upload_multiple_images(
         self,
-        file_paths: list,
+        file_paths: list[str],
         email: str,
         endpoint: str = "/api/images/v2/upload",
         timezone: str = None,
         alg_version: str = None,
-    ) -> list:
+    ) -> list[UploadResult]:
         """
         Upload multiple image files.
 
@@ -215,7 +216,7 @@ class ImageUploader:
         Returns:
             List of upload results (dicts with success/error info)
         """
-        results = []
+        results: list[UploadResult] = []
 
         for file_path in file_paths:
             try:

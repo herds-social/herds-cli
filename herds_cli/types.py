@@ -228,6 +228,23 @@ class ImageUploadResponse(TypedDict, total=False):
     media_type: str
 
 
+class UploadResult(TypedDict, total=False):
+    """Single entry returned by ImageUploader.upload_multiple_images.
+
+    On success: all ImageUploadResponse fields plus status="success".
+    On error: status="error", file_path, and error message.
+    """
+
+    status: str  # "success" or "error"
+    file_path: str
+    error: str
+    # Fields inherited from a successful ImageUploadResponse
+    image_id: str
+    image_name: str
+    image_extraction_status: str
+    media_type: str
+
+
 class ExtractionException(TypedDict, total=False):
     """Error details when image extraction fails."""
 
