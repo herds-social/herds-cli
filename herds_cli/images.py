@@ -18,8 +18,8 @@ class ImageUploader:
 
     def __init__(
         self,
-        api_client: APIClient = None,
-        session_manager: SessionManager = None,
+        api_client: Optional[APIClient] = None,
+        session_manager: Optional[SessionManager] = None,
     ):
         self.api_client = api_client or APIClient()
         self.session_manager = session_manager or SessionManager()

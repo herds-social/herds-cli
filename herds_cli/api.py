@@ -7,7 +7,7 @@ HTTP client for interacting with the Herds API with session management.
 import requests
 import time
 import json
-from typing import Any, Dict, List, Literal, NoReturn, Optional
+from typing import Any, Dict, List, Literal, NoReturn, Optional, overload
 from urllib.parse import urlencode
 
 from .sessions import SessionManager
@@ -35,7 +35,7 @@ class APIClient:
     def __init__(
         self,
         base_url: str = "http://localhost:8000",
-        session_manager: SessionManager = None,
+        session_manager: Optional[SessionManager] = None,
         no_login: bool = False,
         debug_requests: bool = False,
         timeout: int = 30,
@@ -80,6 +80,13 @@ class APIClient:
             if "refresh_token" in cookies:
                 self.session.cookies.set("refresh_token", cookies["refresh_token"])
             return True
+
+    @overload
+    def _sanitize_data(self, data: Dict[str, Any], skip_auth_redaction: bool = ...) -> Dict[str, Any]: ...
+    @overload
+    def _sanitize_data(self, data: List[Any], skip_auth_redaction: bool = ...) -> List[Any]: ...
+    @overload
+    def _sanitize_data(self, data: None, skip_auth_redaction: bool = ...) -> None: ...
 
     def _sanitize_data(self, data: Any, skip_auth_redaction: bool = False) -> Any:
         """Sanitize sensitive data for logging."""
