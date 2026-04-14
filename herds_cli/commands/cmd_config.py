@@ -26,7 +26,8 @@ class ConfigKeyInfo(TypedDict):
     choices: NotRequired[list[str]]
 
 
-# Static config key metadata — 'current' is populated at runtime from Config.to_dict()
+# Static config key metadata — 'current' is populated at runtime from Config.to_dict().
+# Keep in sync with Config dataclass fields and _CONFIGURABLE_KEYS in core/config.py.
 CONFIG_KEYS: dict[str, ConfigKeyInfo] = {
     "api_url": {
         "type": "url",

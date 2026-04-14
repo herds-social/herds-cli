@@ -42,6 +42,11 @@ class Config:
 
     Internal fields (_validation_errors, _loaded_config_file) are excluded
     from serialization by save() but ARE included by to_dict()/asdict().
+
+    Adding a new configurable field requires updates in three locations:
+        1. Add a field to this dataclass.
+        2. Add the field name to _CONFIGURABLE_KEYS (above).
+        3. Add a corresponding entry to CONFIG_KEYS in commands/cmd_config.py.
     """
 
     # API settings
@@ -65,7 +70,7 @@ class Config:
     session_dir: Optional[str] = None
 
     # Internal fields (not serialized)
-    _validation_errors: list = field(default_factory=list, init=False)
+    _validation_errors: list[str] = field(default_factory=list, init=False)
     _loaded_config_file: Optional[str] = field(default=None, init=False)
 
     @classmethod
@@ -213,7 +218,7 @@ class Config:
 
         return len(self._validation_errors) == 0
 
-    def get_validation_errors(self) -> list:
+    def get_validation_errors(self) -> list[str]:
         """Get list of validation errors."""
         return self._validation_errors.copy()
 
