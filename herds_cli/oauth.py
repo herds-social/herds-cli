@@ -14,7 +14,7 @@ import urllib.request
 import webbrowser
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Optional
+from typing import Any, Optional
 
 from herds_cli.types import GoogleOAuthConfig
 
@@ -22,17 +22,17 @@ from herds_cli.types import GoogleOAuthConfig
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
     """HTTP handler for OAuth callback."""
 
-    def __init__(self, *args, oauth_flow=None, **kwargs):
+    def __init__(self, *args, oauth_flow: Optional["GoogleOAuthFlow"] = None, **kwargs: Any) -> None:
         self.oauth_flow = oauth_flow
         # super().__init__() calls do_GET() synchronously when a request is
         # pending, so self.oauth_flow must be set *before* this call.
         super().__init__(*args, **kwargs)
 
-    def log_message(self, format, *args):
+    def log_message(self, format: str, *args: Any) -> None:
         """Suppress default HTTP server logs."""
         pass
 
-    def do_GET(self):
+    def do_GET(self) -> None:
         """Handle OAuth callback GET request."""
         try:
             # Parse the callback URL
@@ -75,7 +75,7 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
             self.oauth_flow.error_message = f"Callback error: {str(e)}"
             self._send_response("An error occurred during authentication.")
 
-    def _send_response(self, message: str):
+    def _send_response(self, message: str) -> None:
         """Send HTML response."""
         self.send_response(200)
         self.send_header("Content-type", "text/html")

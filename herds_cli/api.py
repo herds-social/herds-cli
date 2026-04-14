@@ -144,7 +144,7 @@ class APIClient:
         else:
             return data
 
-    def _log_request(self, method: str, url: str, **kwargs):
+    def _log_request(self, method: str, url: str, **kwargs: Any) -> None:
         """Log HTTP request details if debug mode is enabled."""
         if not self.debug_requests:
             return
@@ -178,7 +178,7 @@ class APIClient:
                         files_info[key] = "<file data>"
                 print(f"[DEBUG REQUEST] Files: {json.dumps(files_info, indent=2)}")
 
-    def _log_response(self, response: requests.Response, start_time: float):
+    def _log_response(self, response: requests.Response, start_time: float) -> None:
         """Log HTTP response details if debug mode is enabled."""
         if not self.debug_requests:
             return
