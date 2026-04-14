@@ -18,7 +18,7 @@ from herds_cli.core.base import (
 
 
 @click.group()
-def events():
+def events() -> None:
     """Event management commands (list, get, etc.)"""
 
 
@@ -59,8 +59,16 @@ def events():
 )
 @click.pass_context
 def list_events(
-    ctx, email, user_id, limit, offset, date_filter, sort_by, sort_order, summary
-):
+    ctx: click.Context,
+    email: Optional[str],
+    user_id: Optional[str],
+    limit: int,
+    offset: int,
+    date_filter: str,
+    sort_by: str,
+    sort_order: str,
+    summary: bool,
+) -> None:
     """List events for a user.
 
     By default shows upcoming events only. Use --date-filter to change:
@@ -113,7 +121,7 @@ def list_events(
 @click.argument("event_id")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.pass_context
-def get(ctx, event_id, email):
+def get(ctx: click.Context, event_id: str, email: Optional[str]) -> None:
     """Get a specific event by ID."""
     cmd = EventCommandBase(ctx)
 
@@ -144,7 +152,7 @@ def get(ctx, event_id, email):
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 @click.pass_context
-def delete(ctx, event_id, email, yes):
+def delete(ctx: click.Context, event_id: str, email: Optional[str], yes: bool) -> None:
     """Delete an event by ID.
 
     This action cannot be undone. The event and all associated data (image, S3 files, responses) will be permanently deleted.
@@ -181,7 +189,7 @@ def delete(ctx, event_id, email, yes):
     "--user-id", help="User ID to filter events for (required when using --no-login)"
 )
 @click.pass_context
-def get_events_by_image_id(ctx, image_id, email, user_id):
+def get_events_by_image_id(ctx: click.Context, image_id: str, email: Optional[str], user_id: Optional[str]) -> None:
     """Get events associated with a specific image ID."""
     cmd = EventCommandBase(ctx)
 
@@ -251,30 +259,30 @@ def get_events_by_image_id(ctx, image_id, email, user_id):
 @click.option("--outlook-calendar-id", help="Outlook Calendar event ID")
 @click.pass_context
 def update_event(
-    ctx,
-    event_id,
-    email,
-    title,
-    description,
-    notes,
-    date_start,
-    date_end,
-    time_start,
-    time_end,
-    is_all_day,
-    street_address,
-    city,
-    state,
-    organizer,
-    email_contact,
-    phone,
-    website,
-    category_level_1,
-    age_demographic,
-    apple_calendar_id,
-    google_calendar_id,
-    outlook_calendar_id,
-):
+    ctx: click.Context,
+    event_id: str,
+    email: Optional[str],
+    title: Optional[str],
+    description: Optional[str],
+    notes: Optional[str],
+    date_start: Optional[str],
+    date_end: Optional[str],
+    time_start: Optional[str],
+    time_end: Optional[str],
+    is_all_day: Optional[bool],
+    street_address: Optional[str],
+    city: Optional[str],
+    state: Optional[str],
+    organizer: Optional[str],
+    email_contact: Optional[str],
+    phone: Optional[str],
+    website: Optional[str],
+    category_level_1: Optional[str],
+    age_demographic: Optional[str],
+    apple_calendar_id: Optional[str],
+    google_calendar_id: Optional[str],
+    outlook_calendar_id: Optional[str],
+) -> None:
     """Update an event with new details and calendar integration data.
 
     Allows updating event metadata (title, description, location, contact info, categories),
