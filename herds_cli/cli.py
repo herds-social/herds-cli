@@ -9,6 +9,7 @@ Supports user management and image operations with session-based authentication.
 import click
 import sys
 from pathlib import Path
+from typing import Optional
 from zoneinfo import ZoneInfo
 from tzlocal import get_localzone
 import pytz
@@ -148,15 +149,15 @@ def validate_timezone(timezone: str) -> str:
 )
 @click.pass_context
 def cli(
-    ctx,
-    config,
-    base_url,
-    output_format,
-    verbose,
-    debug_requests,
-    timezone,
-    default_account,
-):
+    ctx: click.Context,
+    config: Optional[str],
+    base_url: Optional[str],
+    output_format: Optional[str],
+    verbose: bool,
+    debug_requests: bool,
+    timezone: Optional[str],
+    default_account: Optional[str],
+) -> None:
     """Herds CLI Tool - Unified interface for user and image operations."""
     ctx.ensure_object(dict)
 

@@ -5,10 +5,13 @@ Handles different output formats for CLI responses using Rich.
 """
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 from rich.table import Table
+
+if TYPE_CHECKING:
+    from .core.config import Config
 
 # Initialize rich console for beautiful output
 console = Console()
@@ -66,7 +69,7 @@ class OutputFormatter:
         console.print(f"[bright_blue]ℹ️  {message}[/bright_blue]")
 
     @staticmethod
-    def display_configuration(config_obj):
+    def display_configuration(config_obj: "Config") -> None:
         """Display the current configuration settings."""
         OutputFormatter.print_info("Current Configuration:")
         OutputFormatter.print_info(f"  API URL: {config_obj.api_url}")
