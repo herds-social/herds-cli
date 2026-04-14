@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Literal, NoReturn, Optional
 from urllib.parse import urlencode
 
 from .sessions import SessionManager
-from .types import EventV2, LoginResponse, UserResponse
+from .types import EventV2, LoginResponse, SessionData, UserResponse
 
 
 class APIClient:
@@ -223,23 +223,20 @@ class APIClient:
             result = response.json()
 
             # Handle different response types based on client_type
-            session_data = {
-                "base_url": self.base_url,
-                "client_type": client_type,
-            }
+            session_data: SessionData
 
             if client_type == "mobile":
                 # Mobile client - tokens are in response body
-                session_data.update(
-                    {
-                        "tokens": {
-                            "access_token": result.get("access_token"),
-                            "refresh_token": result.get("refresh_token"),
-                            "expires_in": result.get("expires_in", 3600),
-                        },
-                        "user_data": result.get("user", {}),
-                    }
-                )
+                session_data = {
+                    "base_url": self.base_url,
+                    "client_type": client_type,
+                    "tokens": {
+                        "access_token": result.get("access_token"),
+                        "refresh_token": result.get("refresh_token"),
+                        "expires_in": result.get("expires_in", 3600),
+                    },
+                    "user_data": result.get("user", {}),
+                }
             else:
                 # Web client - extract cookies from response
                 cookies = {}
@@ -248,12 +245,12 @@ class APIClient:
                 if "refresh_token" in response.cookies:
                     cookies["refresh_token"] = response.cookies["refresh_token"]
 
-                session_data.update(
-                    {
-                        "cookies": cookies,
-                        "user_data": result.get("user", {}),
-                    }
-                )
+                session_data = {
+                    "base_url": self.base_url,
+                    "client_type": client_type,
+                    "cookies": cookies,
+                    "user_data": result.get("user", {}),
+                }
 
             filename = self.session_manager.save_session(email, session_data)
             result["session_filename"] = filename
@@ -294,9 +291,9 @@ class APIClient:
             result = response.json()
 
             # Handle Google auth response (similar to login but mobile-only)
-            session_data = {
+            session_data: SessionData = {
                 "base_url": self.base_url,
-                "client_type": "mobile",  # Google auth only supports mobile client type
+                "client_type": "mobile",
                 "auth_provider": "google",
                 "tokens": {
                     "access_token": result.get("access_token"),
