@@ -40,7 +40,10 @@ def _load_google_oauth_credentials(
     google_client_secret: Optional[str] = None
     google_redirect_uri = _DEFAULT_REDIRECT_URI
 
-    # Try the standalone Google OAuth JSON file first
+    # Try the standalone Google OAuth JSON file first.
+    # Accepts two shapes:
+    #   1. Google Cloud "installed" format: {"installed": {"client_id": ..., "client_secret": ..., "redirect_uris": [...]}}
+    #   2. Flat format: {"google_client_id": "...", "google_client_secret": "..."}
     try:
         with open("./herds-google-oauth-config.json", "r") as f:
             google_config = json.load(f)
@@ -54,14 +57,19 @@ def _load_google_oauth_credentials(
                     google_redirect_uri = _DEFAULT_REDIRECT_URI
                 else:
                     google_redirect_uri = redirect_uri
+        else:
+            google_client_id = google_config.get("google_client_id")
+            google_client_secret = google_config.get("google_client_secret")
     except FileNotFoundError:
         pass  # Will check general config below
 
-    # Fall back to general CLI config if JSON file didn't have credentials
+    # Fall back to general CLI config if JSON file didn't have credentials.
+    # Config may not have google_client_* attributes (they aren't dataclass
+    # fields), so use getattr to avoid AttributeError.
     if not google_client_id and config:
-        google_client_id = config.google_client_id
+        google_client_id = getattr(config, "google_client_id", None)
     if not google_client_secret and config:
-        google_client_secret = config.google_client_secret
+        google_client_secret = getattr(config, "google_client_secret", None)
 
     if not google_client_id or not google_client_secret:
         OutputFormatter.print_error(
@@ -70,10 +78,18 @@ def _load_google_oauth_credentials(
             "in your herds-google-oauth-config.json file."
         )
         OutputFormatter.print_info(
-            "Example configuration:\n"
+            "Example herds-google-oauth-config.json (flat format):\n"
             "{\n"
-            '  "google_client_id": "your_google_client_id",\n'
-            '  "google_client_secret": "your_google_client_secret"\n'
+            '  "google_client_id": "your_client_id",\n'
+            '  "google_client_secret": "your_client_secret"\n'
+            "}\n\n"
+            "Or Google Cloud Console format:\n"
+            "{\n"
+            '  "installed": {\n'
+            '    "client_id": "your_client_id",\n'
+            '    "client_secret": "your_client_secret",\n'
+            '    "redirect_uris": ["http://localhost"]\n'
+            "  }\n"
             "}"
         )
         sys.exit(1)

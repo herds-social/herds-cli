@@ -613,6 +613,7 @@ class APIClient:
         date_end: Optional[str] = None,
         time_start: Optional[str] = None,
         time_end: Optional[str] = None,
+        is_all_day: Optional[bool] = None,
         street_address: Optional[str] = None,
         city: Optional[str] = None,
         state: Optional[str] = None,
@@ -657,6 +658,8 @@ class APIClient:
             data["time_start"] = time_start
         if time_end is not None:
             data["time_end"] = time_end
+        if is_all_day is not None:
+            data["is_all_day"] = is_all_day
 
         # Location fields
         if street_address is not None:

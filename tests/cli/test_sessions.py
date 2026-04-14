@@ -61,6 +61,98 @@ class TestSessionManagerDelete:
         assert result is False
 
 
+class TestSessionManagerCopyBeforeMutate:
+    """Verify save_session does not mutate the caller's dict."""
+
+    def test_caller_dict_unchanged(self, mock_session_manager):
+        original = {
+            "client_type": "mobile",
+            "tokens": {"access_token": "tok"},
+            "user_data": {"id": "u1", "email": "test@example.com"},
+        }
+        original_copy = dict(original)
+
+        mock_session_manager.save_session("test@example.com", original)
+
+        # The caller's dict must not have been mutated with email/created_at/etc.
+        assert original == original_copy
+        assert "email" not in original
+        assert "created_at" not in original
+        assert "session_filename" not in original
+
+    def test_saved_file_has_enriched_fields(self, mock_session_manager):
+        mock_session_manager.save_session("test@example.com", {
+            "client_type": "mobile",
+            "tokens": {"access_token": "tok"},
+            "user_data": {"id": "u1", "email": "test@example.com"},
+        })
+
+        loaded = mock_session_manager.load_session("test@example.com")
+        assert loaded["email"] == "test@example.com"
+        assert "created_at" in loaded
+        assert "session_filename" in loaded
+
+
+class TestSessionManagerKeyValidation:
+    """Verify load_session rejects sessions missing required keys."""
+
+    def test_missing_client_type_returns_none(self, mock_session_manager, capsys):
+        """A session file without client_type is treated as invalid."""
+        # Write a raw file bypassing save_session to create an invalid session
+        import json
+        filename = mock_session_manager.get_session_filename("bad@example.com")
+        filename.parent.mkdir(parents=True, exist_ok=True)
+        with open(filename, "w") as f:
+            json.dump({"email": "bad@example.com", "tokens": {}}, f)
+
+        result = mock_session_manager.load_session("bad@example.com")
+
+        assert result is None
+        captured = capsys.readouterr()
+        assert "client_type" in captured.out
+
+    def test_missing_email_returns_none(self, mock_session_manager, capsys):
+        """A session file without email is treated as invalid."""
+        import json
+        filename = mock_session_manager.get_session_filename("noemail@example.com")
+        filename.parent.mkdir(parents=True, exist_ok=True)
+        with open(filename, "w") as f:
+            json.dump({"client_type": "mobile", "tokens": {}}, f)
+
+        result = mock_session_manager.load_session("noemail@example.com")
+
+        assert result is None
+        captured = capsys.readouterr()
+        assert "email" in captured.out
+
+    def test_valid_session_loads_normally(self, mock_session_manager):
+        """Sessions with all required keys load successfully."""
+        mock_session_manager.save_session("good@example.com", {
+            "client_type": "mobile",
+            "tokens": {"access_token": "tok"},
+            "user_data": {"id": "u1", "email": "good@example.com"},
+        })
+
+        loaded = mock_session_manager.load_session("good@example.com")
+        assert loaded is not None
+        assert loaded["client_type"] == "mobile"
+        assert loaded["email"] == "good@example.com"
+
+    def test_missing_both_keys_returns_none(self, mock_session_manager, capsys):
+        import json
+        filename = mock_session_manager.get_session_filename("empty@example.com")
+        filename.parent.mkdir(parents=True, exist_ok=True)
+        with open(filename, "w") as f:
+            json.dump({"tokens": {}}, f)
+
+        result = mock_session_manager.load_session("empty@example.com")
+
+        assert result is None
+        captured = capsys.readouterr()
+        assert "client_type" in captured.out
+        assert "email" in captured.out
+
+
 class TestSessionManagerList:
     def test_list_empty(self, mock_session_manager):
         sessions = mock_session_manager.list_sessions()

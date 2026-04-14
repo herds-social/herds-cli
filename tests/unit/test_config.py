@@ -70,6 +70,41 @@ class TestConfigLoadFromFile:
         assert config.api_url == "https://example.com"
         assert not hasattr(config, "unknown_field")
 
+    def test_allowlist_rejects_internal_field_overwrite(self, tmp_config_file):
+        """_loaded_config_file exists as an attribute but is NOT in _CONFIGURABLE_KEYS."""
+        tmp_config_file.write_text(json.dumps({
+            "_loaded_config_file": "/injected/path",
+            "api_url": "https://example.com",
+        }))
+
+        config = Config.load(str(tmp_config_file))
+        assert config.api_url == "https://example.com"
+        # _loaded_config_file should be set to the actual config path, not the injected value
+        assert config._loaded_config_file != "/injected/path"
+
+    def test_all_configurable_keys_accepted(self, tmp_config_file):
+        """Every key in _CONFIGURABLE_KEYS should be applied from JSON."""
+        tmp_config_file.write_text(json.dumps({
+            "api_url": "https://custom.example.com",
+            "api_timeout": 99,
+            "output_format": "table",
+            "verbose": True,
+            "debug_requests": True,
+            "timezone": "UTC",
+            "default_account": "user@example.com",
+            "session_dir": "/tmp/sessions",
+        }))
+
+        config = Config.load(str(tmp_config_file))
+        assert config.api_url == "https://custom.example.com"
+        assert config.api_timeout == 99
+        assert config.output_format == "table"
+        assert config.verbose is True
+        assert config.debug_requests is True
+        assert config.timezone == "UTC"
+        assert config.default_account == "user@example.com"
+        assert config.session_dir == "/tmp/sessions"
+
     def test_load_without_path_uses_defaults(self):
         config = Config.load()
         assert config.api_url == "http://localhost:8000"
