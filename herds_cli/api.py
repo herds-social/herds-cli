@@ -76,10 +76,19 @@ class APIClient:
         Mutates self.session in place: sets Authorization headers (mobile)
         or cookies (web) so subsequent requests are authenticated. Called
         by CommandBase.setup_session() during command initialisation.
+
+        Clears any previous auth state first so that switching between
+        accounts or client types never leaves stale credentials.
         """
         # If no_login is enabled, skip authentication entirely
         if self.no_login:
             return True
+
+        # Clear previous auth state to prevent stale credentials from
+        # leaking when switching accounts or between mobile/web modes.
+        self.session.headers.pop("Authorization", None)
+        for cookie_name in ("access_token", "refresh_token"):
+            self.session.cookies.set(cookie_name, None)
 
         session_data = self.session_manager.load_session(email)
         if not session_data:
@@ -88,7 +97,7 @@ class APIClient:
         client_type = session_data.get("client_type", "web")
 
         if client_type == "mobile":
-            # Mobile client - use Authorization header
+            # Mobile client - use Authorization header only
             tokens = session_data.get("tokens", {})
             access_token = tokens.get("access_token")
             if access_token:
@@ -96,7 +105,7 @@ class APIClient:
                 return True
             return False
         else:
-            # Web client - use cookies (backwards compatible)
+            # Web client - use cookies only (backwards compatible)
             cookies = session_data.get("cookies", {})
             if not cookies:
                 return False
@@ -695,7 +704,7 @@ class APIClient:
         if organizer is not None:
             data["organizer"] = organizer
         if email_contact is not None:
-            data["email"] = email_contact
+            data["email_contact"] = email_contact
         if phone is not None:
             data["phone"] = phone
         if website is not None:
