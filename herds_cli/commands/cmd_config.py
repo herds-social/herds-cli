@@ -8,9 +8,65 @@ CLI configuration.
 import click
 import sys
 from pathlib import Path
+from typing import NotRequired, TypedDict
 
 from herds_cli.output import OutputFormatter
 from herds_cli.core.config import Config
+
+
+class ConfigKeyInfo(TypedDict):
+    """Metadata for a single configurable key: its type, description, and optional choices."""
+
+    type: str
+    description: str
+    current: str | int | bool | None
+    choices: NotRequired[list[str]]
+
+
+# Static config key metadata — 'current' is populated at runtime from Config.to_dict()
+CONFIG_KEYS: dict[str, ConfigKeyInfo] = {
+    "api_url": {
+        "type": "url",
+        "description": "API base URL (e.g., https://api.example.com)",
+        "current": None,
+    },
+    "api_timeout": {
+        "type": "int",
+        "description": "API timeout in seconds (positive integer)",
+        "current": None,
+    },
+    "output_format": {
+        "type": "choice",
+        "choices": ["json", "table"],
+        "description": "Output format (json or table)",
+        "current": None,
+    },
+    "verbose": {
+        "type": "bool",
+        "description": "Enable verbose output (true/false)",
+        "current": None,
+    },
+    "debug_requests": {
+        "type": "bool",
+        "description": "Enable request debugging (true/false)",
+        "current": None,
+    },
+    "timezone": {
+        "type": "timezone",
+        "description": "Timezone for operations (e.g., America/New_York, UTC)",
+        "current": None,
+    },
+    "default_account": {
+        "type": "email",
+        "description": "Default account email to use when multiple sessions exist",
+        "current": None,
+    },
+    "session_dir": {
+        "type": "path",
+        "description": "Directory path for storing session files",
+        "current": None,
+    },
+}
 
 
 @click.group()
@@ -288,52 +344,11 @@ def set(ctx, config_file, local, prod, key, value):
             # Create a new config with defaults
             config_obj = Config()
 
-    # Get the current config values for reference
+    # Build config keys with current values from runtime config
     current_config = config_obj.to_dict()
-
-    # Define available config keys with their types and descriptions
-    config_keys = {
-        "api_url": {
-            "type": "url",
-            "description": "API base URL (e.g., https://api.example.com)",
-            "current": current_config.get("api_url", "http://localhost:8000"),
-        },
-        "api_timeout": {
-            "type": "int",
-            "description": "API timeout in seconds (positive integer)",
-            "current": current_config.get("api_timeout", 30),
-        },
-        "output_format": {
-            "type": "choice",
-            "choices": ["json", "table"],
-            "description": "Output format (json or table)",
-            "current": current_config.get("output_format", "json"),
-        },
-        "verbose": {
-            "type": "bool",
-            "description": "Enable verbose output (true/false)",
-            "current": current_config.get("verbose", False),
-        },
-        "debug_requests": {
-            "type": "bool",
-            "description": "Enable request debugging (true/false)",
-            "current": current_config.get("debug_requests", False),
-        },
-        "timezone": {
-            "type": "timezone",
-            "description": "Timezone for operations (e.g., America/New_York, UTC)",
-            "current": current_config.get("timezone", None),
-        },
-        "default_account": {
-            "type": "email",
-            "description": "Default account email to use when multiple sessions exist",
-            "current": current_config.get("default_account", None),
-        },
-        "session_dir": {
-            "type": "path",
-            "description": "Directory path for storing session files",
-            "current": current_config.get("session_dir", None),
-        },
+    config_keys: dict[str, ConfigKeyInfo] = {
+        k: {**info, "current": current_config.get(k)}
+        for k, info in CONFIG_KEYS.items()
     }
 
     # Handle different command modes
@@ -348,16 +363,14 @@ def set(ctx, config_file, local, prod, key, value):
         _set_interactive_wizard(config_obj, config_keys, config_file)
 
 
-def _set_single_value(config_obj, config_keys, key, value, config_file):
-    """Set a single configuration value programmatically.
-
-    Args:
-        config_obj: Configuration object to update
-        config_keys: Dictionary of available configuration keys
-        key: Configuration key to set
-        value: Value to set
-        config_file: Path to configuration file
-    """
+def _set_single_value(
+    config_obj: Config,
+    config_keys: dict[str, ConfigKeyInfo],
+    key: str,
+    value: str,
+    config_file: str,
+) -> None:
+    """Set a single configuration value programmatically."""
     if key not in config_keys:
         OutputFormatter.print_error(f"Unknown configuration key: {key}")
         OutputFormatter.print_info(f"Available keys: {', '.join(config_keys.keys())}")
@@ -392,7 +405,12 @@ def _set_single_value(config_obj, config_keys, key, value, config_file):
         sys.exit(1)
 
 
-def _set_single_value_interactive(config_obj, config_keys, key, config_file):
+def _set_single_value_interactive(
+    config_obj: Config,
+    config_keys: dict[str, ConfigKeyInfo],
+    key: str,
+    config_file: str,
+) -> None:
     """Set a single configuration value interactively."""
     if key not in config_keys:
         OutputFormatter.print_error(f"Unknown configuration key: {key}")
@@ -440,7 +458,11 @@ def _set_single_value_interactive(config_obj, config_keys, key, config_file):
         sys.exit(1)
 
 
-def _set_interactive_wizard(config_obj, config_keys, config_file):
+def _set_interactive_wizard(
+    config_obj: Config,
+    config_keys: dict[str, ConfigKeyInfo],
+    config_file: str,
+) -> None:
     """Run interactive wizard to set multiple configuration values."""
     OutputFormatter.print_info("Interactive Configuration Wizard")
     OutputFormatter.print_info("=================================")
@@ -503,7 +525,11 @@ def _set_interactive_wizard(config_obj, config_keys, config_file):
         sys.exit(1)
 
 
-def _validate_and_convert_value(key, value, key_info):
+def _validate_and_convert_value(
+    key: str,
+    value: str | int | bool | None,
+    key_info: ConfigKeyInfo,
+) -> str | int | bool | None:
     """Validate and convert a configuration value based on its type."""
     value_type = key_info["type"]
 
