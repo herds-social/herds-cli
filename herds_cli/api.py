@@ -8,7 +8,6 @@ import requests
 import time
 import json
 from typing import Any, Dict, List, Literal, NoReturn, Optional, overload
-from urllib.parse import urlencode
 
 from .sessions import SessionManager
 from .types import EventV2, LoginResponse, SessionData, UserResponse
@@ -396,31 +395,48 @@ class APIClient:
             self.handle_api_error(response)
 
     def get_events_by_user(
-        self, email: str, user_id: str, version: str = "v2", **params
+        self,
+        email: str,
+        user_id: str,
+        *,
+        limit: int = 10,
+        offset: int = 0,
+        timezone: str = "UTC",
+        date_filter: str = "upcoming",
+        sort_by: str = "utc_start",
+        sort_order: str = "asc",
     ) -> List[EventV2]:
         """Get events for a specific user."""
         # Load session authentication
         if not self.load_session_auth(email):
             raise Exception(f"No valid session found for {email}. Please login first.")
 
-        # Use v2 endpoint (v1 no longer exists)
         url = f"{self.base_url}/api/events/v2"
 
-        # Add query parameters
-        if params:
-            from urllib.parse import urlencode
+        query_params = {
+            "user_id": user_id,
+            "limit": limit,
+            "offset": offset,
+            "timezone": timezone,
+            "date_filter": date_filter,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+        }
 
-            query_string = urlencode(params)
-            url += f"?{query_string}"
-
-        response = self._make_request("GET", url, params={"user_id": user_id})
+        response = self._make_request("GET", url, params=query_params)
 
         if response.status_code == 200:
             return response.json()
         else:
             self.handle_api_error(response)
 
-    def get_event_by_id(self, email: str, event_id: str, **params) -> EventV2:
+    def get_event_by_id(
+        self,
+        email: str,
+        event_id: str,
+        *,
+        timezone: str = "UTC",
+    ) -> EventV2:
         """Get a specific event by ID."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -428,12 +444,7 @@ class APIClient:
 
         url = f"{self.base_url}/api/events/{event_id}"
 
-        # Add query parameters if provided
-        if params:
-            query_string = urlencode(params)
-            url += f"?{query_string}"
-
-        response = self._make_request("GET", url)
+        response = self._make_request("GET", url, params={"timezone": timezone})
 
         if response.status_code == 200:
             return response.json()
@@ -441,7 +452,12 @@ class APIClient:
             self.handle_api_error(response)
 
     def get_events_by_image_id(
-        self, email: str, image_id: str, user_id: Optional[str] = None, **params
+        self,
+        email: str,
+        image_id: str,
+        *,
+        user_id: Optional[str] = None,
+        timezone: str = "UTC",
     ) -> List[EventV2]:
         """Get events associated with a specific image ID."""
         # Load session authentication
@@ -450,17 +466,11 @@ class APIClient:
 
         url = f"{self.base_url}/api/events/by-image/{image_id}"
 
-        # Add query parameters if provided
-        if params:
-            query_string = urlencode(params)
-            url += f"?{query_string}"
-
-        # Add user_id as query parameter if provided (for no-login mode)
-        request_params = {}
+        query_params: Dict[str, str] = {"timezone": timezone}
         if user_id:
-            request_params["user_id"] = user_id
+            query_params["user_id"] = user_id
 
-        response = self._make_request("GET", url, params=request_params)
+        response = self._make_request("GET", url, params=query_params)
 
         if response.status_code == 200:
             return response.json()

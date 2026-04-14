@@ -78,20 +78,19 @@ def list_events(
     if not user_id:
         user_id = cmd.extract_user_id(email)
 
-    # Build parameters
-    params = {
-        "limit": limit,
-        "offset": offset,
-        "timezone": cmd.ctx.obj["timezone"],
-        "date_filter": date_filter,
-        "sort_by": sort_by,
-        "sort_order": sort_order,
-    }
-
     OutputFormatter.print_info(f"Retrieving events for user {user_id}...")
 
     # Use the API client method directly (since it handles auth internally)
-    result = cmd.api_client.get_events_by_user(email, user_id, **params)
+    result = cmd.api_client.get_events_by_user(
+        email,
+        user_id,
+        limit=limit,
+        offset=offset,
+        timezone=cmd.ctx.obj["timezone"],
+        date_filter=date_filter,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
 
     events = result if isinstance(result, list) else []
 
@@ -189,17 +188,12 @@ def get_events_by_image_id(ctx, image_id, email, user_id):
     if not user_id:
         user_id = cmd.extract_user_id(email)
 
-    # Build parameters
-    params = {
-        "timezone": cmd.ctx.obj["timezone"],
-    }
-
     OutputFormatter.print_info(f"Retrieving events for image {image_id}...")
 
     try:
         # Use the API client method directly
         result = cmd.api_client.get_events_by_image_id(
-            email, image_id, user_id=user_id, **params
+            email, image_id, user_id=user_id, timezone=cmd.ctx.obj["timezone"]
         )
 
         events = result if isinstance(result, list) else []
