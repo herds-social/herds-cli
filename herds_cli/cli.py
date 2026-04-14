@@ -43,6 +43,9 @@ class HerdsGroup(click.Group):
         try:
             return super().invoke(ctx)
         except HerdsError:
+            # Contract: helpers in core/base.py print a user-friendly message
+            # *before* raising HerdsError, so we only need to set the exit code
+            # here — no additional output is necessary.
             sys.exit(1)
 
 
@@ -86,7 +89,9 @@ def validate_timezone(timezone: str) -> str:
         ZoneInfo(timezone)
         return timezone
     except Exception:
-        # Fallback to pytz for broader compatibility
+        # zoneinfo uses the OS tz database and may lack entries that pytz
+        # bundles. Fall back to pytz so users on minimal systems (e.g. Alpine
+        # Docker images) still get broad timezone coverage.
         try:
             pytz.timezone(timezone)
             return timezone
@@ -155,7 +160,10 @@ def cli(
     """Herds CLI Tool - Unified interface for user and image operations."""
     ctx.ensure_object(dict)
 
-    # Allow tests to inject pre-built dependencies via obj={"_initialized": True}
+    # Test injection path: tests invoke cli via CliRunner(cli, obj={...})
+    # with pre-built mocks for api_client, session_manager, etc. The
+    # "_initialized" flag lets us skip config loading and component wiring
+    # entirely, so tests control the full dependency graph.
     if ctx.obj.get("_initialized"):
         return
 

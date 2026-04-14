@@ -49,7 +49,12 @@ class APIClient:
         self.session = requests.Session()
 
     def load_session_auth(self, email: str) -> bool:
-        """Load session authentication (cookies or tokens) for authenticated requests."""
+        """Load session authentication for the given account.
+
+        Mutates self.session in place: sets Authorization headers (mobile)
+        or cookies (web) so subsequent requests are authenticated. Called
+        by CommandBase.setup_session() during command initialisation.
+        """
         # If no_login is enabled, skip authentication entirely
         if self.no_login:
             return True

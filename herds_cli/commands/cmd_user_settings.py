@@ -71,7 +71,10 @@ def parse_bool_value(ctx, param, value):
     )
 
 
-# Sentinel to distinguish "not provided" from None
+# Sentinel to distinguish "user did not pass the flag" from "user passed
+# nothing". Click delivers None for both an absent option and an option
+# whose value is genuinely None, so we need a distinct sentinel to tell
+# the two apart — otherwise we'd send a spurious null update to the API.
 _NOT_PROVIDED = object()
 
 RELATIVE_PATTERN = re.compile(

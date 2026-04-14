@@ -24,6 +24,8 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
 
     def __init__(self, *args, oauth_flow=None, **kwargs):
         self.oauth_flow = oauth_flow
+        # super().__init__() calls do_GET() synchronously when a request is
+        # pending, so self.oauth_flow must be set *before* this call.
         super().__init__(*args, **kwargs)
 
     def log_message(self, format, *args):
