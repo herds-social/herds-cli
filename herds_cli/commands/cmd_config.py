@@ -24,6 +24,7 @@ class ConfigKeyInfo(TypedDict):
     description: str
     current: str | int | bool | None
     choices: NotRequired[list[str]]
+    secret: NotRequired[bool]
 
 
 # Static config key metadata — 'current' is populated at runtime from Config.to_dict().
@@ -69,6 +70,7 @@ CONFIG_KEYS: dict[str, ConfigKeyInfo] = {
         "type": "string",
         "description": "Application API key (sent as X-API-Key on account creation)",
         "current": None,
+        "secret": True,
     },
     "config_file": {
         "type": "path",
@@ -81,6 +83,18 @@ CONFIG_KEYS: dict[str, ConfigKeyInfo] = {
         "current": None,
     },
 }
+
+
+def _display_value(
+    value: str | int | bool | None,
+    key_info: ConfigKeyInfo,
+) -> str:
+    """Format a config value for user-facing output, masking secrets."""
+    if value is None:
+        return "(not set)"
+    if key_info.get("secret") and isinstance(value, str) and value:
+        return value[:4] + "****" if len(value) > 4 else "****"
+    return str(value)
 
 
 def _resolve_api_url_shortcut(
@@ -424,7 +438,9 @@ def _set_single_value(
     # Save the configuration
     try:
         config_obj.save(config_file)
-        OutputFormatter.print_success(f"Set {key} = {validated_value}")
+        OutputFormatter.print_success(
+            f"Set {key} = {_display_value(validated_value, key_info)}"
+        )
         OutputFormatter.print_info(f"Configuration saved to: {config_file}")
     except Exception as e:
         OutputFormatter.print_error(f"Failed to save configuration: {e}")
@@ -449,13 +465,11 @@ def _set_single_value_interactive(
     # Show current value and prompt for new value
     OutputFormatter.print_info(f"Setting: {key}")
     OutputFormatter.print_info(f"Description: {key_info['description']}")
-    if current_value is not None:
-        OutputFormatter.print_info(f"Current value: {current_value}")
-    else:
-        OutputFormatter.print_info("Current value: (not set)")
+    OutputFormatter.print_info(f"Current value: {_display_value(current_value, key_info)}")
 
-    # Get user input
-    value = click.prompt(f"Enter new value for {key}", default=current_value)
+    # Get user input (don't echo default for secrets)
+    prompt_default = None if key_info.get("secret") else current_value
+    value = click.prompt(f"Enter new value for {key}", default=prompt_default)
 
     # Validate and set
     try:
@@ -477,7 +491,9 @@ def _set_single_value_interactive(
     # Save the configuration
     try:
         config_obj.save(config_file)
-        OutputFormatter.print_success(f"Set {key} = {validated_value}")
+        OutputFormatter.print_success(
+            f"Set {key} = {_display_value(validated_value, key_info)}"
+        )
         OutputFormatter.print_info(f"Configuration saved to: {config_file}")
     except Exception as e:
         OutputFormatter.print_error(f"Failed to save configuration: {e}")
@@ -505,10 +521,7 @@ def _set_interactive_wizard(
         # Show current value and prompt for new value
         OutputFormatter.print_info(f"Setting: {key}")
         OutputFormatter.print_info(f"Description: {key_info['description']}")
-        if current_value is not None:
-            OutputFormatter.print_info(f"Current value: {current_value}")
-        else:
-            OutputFormatter.print_info("Current value: (not set)")
+        OutputFormatter.print_info(f"Current value: {_display_value(current_value, key_info)}")
 
         # Get user input (allow empty to skip)
         value = click.prompt(
@@ -522,7 +535,9 @@ def _set_interactive_wizard(
                 validated_value = _validate_and_convert_value(key, value, key_info)
                 setattr(config_obj, key, validated_value)
                 changes_made = True
-                OutputFormatter.print_success(f"Set {key} = {validated_value}")
+                OutputFormatter.print_success(
+                    f"Set {key} = {_display_value(validated_value, key_info)}"
+                )
             except ValueError as e:
                 OutputFormatter.print_warning(f"Skipped {key}: {e}")
         else:
