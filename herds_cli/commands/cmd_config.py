@@ -467,9 +467,14 @@ def _set_single_value_interactive(
     OutputFormatter.print_info(f"Description: {key_info['description']}")
     OutputFormatter.print_info(f"Current value: {_display_value(current_value, key_info)}")
 
-    # Get user input (don't echo default for secrets)
-    prompt_default = None if key_info.get("secret") else current_value
-    value = click.prompt(f"Enter new value for {key}", default=prompt_default)
+    # Get user input (don't echo default for secrets; mask typed input)
+    is_secret = bool(key_info.get("secret"))
+    prompt_default = None if is_secret else current_value
+    value = click.prompt(
+        f"Enter new value for {key}",
+        default=prompt_default,
+        hide_input=is_secret,
+    )
 
     # Validate and set
     try:
@@ -523,11 +528,12 @@ def _set_interactive_wizard(
         OutputFormatter.print_info(f"Description: {key_info['description']}")
         OutputFormatter.print_info(f"Current value: {_display_value(current_value, key_info)}")
 
-        # Get user input (allow empty to skip)
+        # Get user input (allow empty to skip; mask typed input for secrets)
         value = click.prompt(
             f"Enter new value for {key} (or press Enter to skip)",
             default="",
             show_default=False,
+            hide_input=bool(key_info.get("secret")),
         )
 
         if value.strip():  # Only process non-empty values
@@ -590,11 +596,11 @@ def _validate_and_convert_value(
     elif value_type == "int":
         try:
             int_value = int(value_str)
-            if int_value <= 0:
-                raise ValueError("Must be a positive integer")
-            return int_value
         except ValueError:
             raise ValueError("Must be a valid integer")
+        if int_value <= 0:
+            raise ValueError("Must be a positive integer")
+        return int_value
 
     elif value_type == "bool":
         lower_value = value_str.lower()
@@ -632,9 +638,7 @@ def _validate_and_convert_value(
         return value_str
 
     elif value_type == "path":
-        # Path validation
-        from pathlib import Path
-
+        # Path validation (Path is imported at module level)
         path = Path(value_str)
         # Don't create directories automatically, just validate the path format
         return str(path)

@@ -160,13 +160,17 @@ class APIClient:
 
         print(f"[DEBUG REQUEST] {method.upper()} {url}")
 
-        # Log headers (sanitized, but show authorization when debug is enabled)
+        # Log headers (sanitized — strip credentials before logging)
         headers = kwargs.get("headers", {})
         if headers or self.session.headers:
             combined_headers = {**self.session.headers, **headers}
-            sanitized_headers = self._sanitize_data(
-                dict(combined_headers), skip_auth_redaction=True
-            )
+            # Normalize Authorization to scheme only so the raw token
+            # never reaches the log, even if _sanitize_data is bypassed.
+            auth_value = combined_headers.get("Authorization", "")
+            if auth_value:
+                scheme = auth_value.split()[0] if auth_value.split() else "Unknown"
+                combined_headers["Authorization"] = f"{scheme} [REDACTED]"
+            sanitized_headers = self._sanitize_data(dict(combined_headers))
             print(f"[DEBUG REQUEST] Headers: {json.dumps(sanitized_headers, indent=2)}")
 
         # Log request body for POST requests
