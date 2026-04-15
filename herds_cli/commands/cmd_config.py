@@ -8,9 +8,142 @@ CLI configuration.
 import click
 import sys
 from pathlib import Path
+from typing import NotRequired, Optional, TypedDict
 
 from herds_cli.output import OutputFormatter
 from herds_cli.core.config import Config
+
+_LOCAL_API_URL = "http://localhost:8000"
+_PROD_API_URL = "https://api.herds.events"
+
+
+class ConfigKeyInfo(TypedDict):
+    """Metadata for a single configurable key: its type, description, and optional choices."""
+
+    type: str
+    description: str
+    current: str | int | bool | None
+    choices: NotRequired[list[str]]
+    secret: NotRequired[bool]
+
+
+# Static config key metadata — 'current' is populated at runtime from Config.to_dict().
+# Keep in sync with Config dataclass fields and _CONFIGURABLE_KEYS in core/config.py.
+CONFIG_KEYS: dict[str, ConfigKeyInfo] = {
+    "api_url": {
+        "type": "url",
+        "description": "API base URL (e.g., https://api.example.com)",
+        "current": None,
+    },
+    "api_timeout": {
+        "type": "int",
+        "description": "API timeout in seconds (positive integer)",
+        "current": None,
+    },
+    "output_format": {
+        "type": "choice",
+        "choices": ["json", "table"],
+        "description": "Output format (json or table)",
+        "current": None,
+    },
+    "verbose": {
+        "type": "bool",
+        "description": "Enable verbose output (true/false)",
+        "current": None,
+    },
+    "debug_requests": {
+        "type": "bool",
+        "description": "Enable request debugging (true/false)",
+        "current": None,
+    },
+    "timezone": {
+        "type": "timezone",
+        "description": "Timezone for operations (e.g., America/New_York, UTC)",
+        "current": None,
+    },
+    "default_account": {
+        "type": "email",
+        "description": "Default account email to use when multiple sessions exist",
+        "current": None,
+    },
+    "app_api_key": {
+        "type": "string",
+        "description": "Application API key (sent as X-API-Key on account creation)",
+        "current": None,
+        "secret": True,
+    },
+    "config_file": {
+        "type": "path",
+        "description": "Path to CLI configuration JSON file",
+        "current": None,
+    },
+    "session_dir": {
+        "type": "path",
+        "description": "Directory path for storing session files",
+        "current": None,
+    },
+}
+
+
+def _display_value(
+    value: str | int | bool | None,
+    key_info: ConfigKeyInfo,
+) -> str:
+    """Format a config value for user-facing output, masking secrets."""
+    if value is None:
+        return "(not set)"
+    if key_info.get("secret") and isinstance(value, str) and value:
+        return value[:4] + "****" if len(value) > 4 else "****"
+    return str(value)
+
+
+def _resolve_api_url_shortcut(
+    local: bool,
+    prod: bool,
+    key: Optional[str],
+    value: Optional[str],
+) -> str:
+    """Validate --local/--prod flag combinations and return the resolved URL.
+
+    Exits with an error message if the flags are used incorrectly (both set,
+    wrong key, or a value also supplied).
+
+    Returns:
+        The resolved API URL string.
+    """
+    if local and prod:
+        OutputFormatter.print_error(
+            "Cannot use both --local and --prod flags simultaneously"
+        )
+        sys.exit(1)
+
+    if not key:
+        OutputFormatter.print_error(
+            "Environment shortcuts (--local, --prod) require specifying 'api_url' as the key"
+        )
+        OutputFormatter.print_info("Usage: herds config set api_url --local")
+        OutputFormatter.print_info("       herds config set api_url --prod")
+        sys.exit(1)
+
+    if key != "api_url":
+        OutputFormatter.print_error(
+            f"Environment shortcuts (--local, --prod) can only be used with 'api_url', not '{key}'"
+        )
+        sys.exit(1)
+
+    if value:
+        OutputFormatter.print_error(
+            "Cannot provide both an environment shortcut flag and a direct value"
+        )
+        OutputFormatter.print_info(
+            "Use either: herds config set api_url --local"
+        )
+        OutputFormatter.print_info(
+            "        or: herds config set api_url https://custom.com"
+        )
+        sys.exit(1)
+
+    return _LOCAL_API_URL if local else _PROD_API_URL
 
 
 @click.group()
@@ -239,44 +372,7 @@ def set(ctx, config_file, local, prod, key, value):
     """
     # Handle environment shortcuts (--local and --prod)
     if local or prod:
-        # Validate usage of environment shortcuts
-        if local and prod:
-            OutputFormatter.print_error(
-                "Cannot use both --local and --prod flags simultaneously"
-            )
-            sys.exit(1)
-
-        if not key:
-            OutputFormatter.print_error(
-                "Environment shortcuts (--local, --prod) require specifying 'api_url' as the key"
-            )
-            OutputFormatter.print_info("Usage: herds config set api_url --local")
-            OutputFormatter.print_info("       herds config set api_url --prod")
-            sys.exit(1)
-
-        if key != "api_url":
-            OutputFormatter.print_error(
-                f"Environment shortcuts (--local, --prod) can only be used with 'api_url', not '{key}'"
-            )
-            sys.exit(1)
-
-        if value:
-            OutputFormatter.print_error(
-                "Cannot provide both an environment shortcut flag and a direct value"
-            )
-            OutputFormatter.print_info(
-                "Use either: herds config set api_url --local"
-            )
-            OutputFormatter.print_info(
-                "        or: herds config set api_url https://custom.com"
-            )
-            sys.exit(1)
-
-        # Set the appropriate URL based on the flag
-        if local:
-            value = "http://localhost:8000"
-        elif prod:
-            value = "https://api.herds.events"
+        value = _resolve_api_url_shortcut(local, prod, key, value)
 
     # Load existing configuration from file if it exists, otherwise use current config
     try:
@@ -288,52 +384,11 @@ def set(ctx, config_file, local, prod, key, value):
             # Create a new config with defaults
             config_obj = Config()
 
-    # Get the current config values for reference
+    # Build config keys with current values from runtime config
     current_config = config_obj.to_dict()
-
-    # Define available config keys with their types and descriptions
-    config_keys = {
-        "api_url": {
-            "type": "url",
-            "description": "API base URL (e.g., https://api.example.com)",
-            "current": current_config.get("api_url", "http://localhost:8000"),
-        },
-        "api_timeout": {
-            "type": "int",
-            "description": "API timeout in seconds (positive integer)",
-            "current": current_config.get("api_timeout", 30),
-        },
-        "output_format": {
-            "type": "choice",
-            "choices": ["json", "table"],
-            "description": "Output format (json or table)",
-            "current": current_config.get("output_format", "json"),
-        },
-        "verbose": {
-            "type": "bool",
-            "description": "Enable verbose output (true/false)",
-            "current": current_config.get("verbose", False),
-        },
-        "debug_requests": {
-            "type": "bool",
-            "description": "Enable request debugging (true/false)",
-            "current": current_config.get("debug_requests", False),
-        },
-        "timezone": {
-            "type": "timezone",
-            "description": "Timezone for operations (e.g., America/New_York, UTC)",
-            "current": current_config.get("timezone", None),
-        },
-        "default_account": {
-            "type": "email",
-            "description": "Default account email to use when multiple sessions exist",
-            "current": current_config.get("default_account", None),
-        },
-        "session_dir": {
-            "type": "path",
-            "description": "Directory path for storing session files",
-            "current": current_config.get("session_dir", None),
-        },
+    config_keys: dict[str, ConfigKeyInfo] = {
+        k: {**info, "current": current_config.get(k)}
+        for k, info in CONFIG_KEYS.items()
     }
 
     # Handle different command modes
@@ -348,16 +403,14 @@ def set(ctx, config_file, local, prod, key, value):
         _set_interactive_wizard(config_obj, config_keys, config_file)
 
 
-def _set_single_value(config_obj, config_keys, key, value, config_file):
-    """Set a single configuration value programmatically.
-
-    Args:
-        config_obj: Configuration object to update
-        config_keys: Dictionary of available configuration keys
-        key: Configuration key to set
-        value: Value to set
-        config_file: Path to configuration file
-    """
+def _set_single_value(
+    config_obj: Config,
+    config_keys: dict[str, ConfigKeyInfo],
+    key: str,
+    value: str,
+    config_file: str,
+) -> None:
+    """Set a single configuration value programmatically."""
     if key not in config_keys:
         OutputFormatter.print_error(f"Unknown configuration key: {key}")
         OutputFormatter.print_info(f"Available keys: {', '.join(config_keys.keys())}")
@@ -385,14 +438,21 @@ def _set_single_value(config_obj, config_keys, key, value, config_file):
     # Save the configuration
     try:
         config_obj.save(config_file)
-        OutputFormatter.print_success(f"Set {key} = {validated_value}")
+        OutputFormatter.print_success(
+            f"Set {key} = {_display_value(validated_value, key_info)}"
+        )
         OutputFormatter.print_info(f"Configuration saved to: {config_file}")
     except Exception as e:
         OutputFormatter.print_error(f"Failed to save configuration: {e}")
         sys.exit(1)
 
 
-def _set_single_value_interactive(config_obj, config_keys, key, config_file):
+def _set_single_value_interactive(
+    config_obj: Config,
+    config_keys: dict[str, ConfigKeyInfo],
+    key: str,
+    config_file: str,
+) -> None:
     """Set a single configuration value interactively."""
     if key not in config_keys:
         OutputFormatter.print_error(f"Unknown configuration key: {key}")
@@ -405,13 +465,16 @@ def _set_single_value_interactive(config_obj, config_keys, key, config_file):
     # Show current value and prompt for new value
     OutputFormatter.print_info(f"Setting: {key}")
     OutputFormatter.print_info(f"Description: {key_info['description']}")
-    if current_value is not None:
-        OutputFormatter.print_info(f"Current value: {current_value}")
-    else:
-        OutputFormatter.print_info("Current value: (not set)")
+    OutputFormatter.print_info(f"Current value: {_display_value(current_value, key_info)}")
 
-    # Get user input
-    value = click.prompt(f"Enter new value for {key}", default=current_value)
+    # Get user input (don't echo default for secrets; mask typed input)
+    is_secret = bool(key_info.get("secret"))
+    prompt_default = None if is_secret else current_value
+    value = click.prompt(
+        f"Enter new value for {key}",
+        default=prompt_default,
+        hide_input=is_secret,
+    )
 
     # Validate and set
     try:
@@ -433,14 +496,20 @@ def _set_single_value_interactive(config_obj, config_keys, key, config_file):
     # Save the configuration
     try:
         config_obj.save(config_file)
-        OutputFormatter.print_success(f"Set {key} = {validated_value}")
+        OutputFormatter.print_success(
+            f"Set {key} = {_display_value(validated_value, key_info)}"
+        )
         OutputFormatter.print_info(f"Configuration saved to: {config_file}")
     except Exception as e:
         OutputFormatter.print_error(f"Failed to save configuration: {e}")
         sys.exit(1)
 
 
-def _set_interactive_wizard(config_obj, config_keys, config_file):
+def _set_interactive_wizard(
+    config_obj: Config,
+    config_keys: dict[str, ConfigKeyInfo],
+    config_file: str,
+) -> None:
     """Run interactive wizard to set multiple configuration values."""
     OutputFormatter.print_info("Interactive Configuration Wizard")
     OutputFormatter.print_info("=================================")
@@ -457,16 +526,14 @@ def _set_interactive_wizard(config_obj, config_keys, config_file):
         # Show current value and prompt for new value
         OutputFormatter.print_info(f"Setting: {key}")
         OutputFormatter.print_info(f"Description: {key_info['description']}")
-        if current_value is not None:
-            OutputFormatter.print_info(f"Current value: {current_value}")
-        else:
-            OutputFormatter.print_info("Current value: (not set)")
+        OutputFormatter.print_info(f"Current value: {_display_value(current_value, key_info)}")
 
-        # Get user input (allow empty to skip)
+        # Get user input (allow empty to skip; mask typed input for secrets)
         value = click.prompt(
             f"Enter new value for {key} (or press Enter to skip)",
             default="",
             show_default=False,
+            hide_input=bool(key_info.get("secret")),
         )
 
         if value.strip():  # Only process non-empty values
@@ -474,7 +541,9 @@ def _set_interactive_wizard(config_obj, config_keys, config_file):
                 validated_value = _validate_and_convert_value(key, value, key_info)
                 setattr(config_obj, key, validated_value)
                 changes_made = True
-                OutputFormatter.print_success(f"Set {key} = {validated_value}")
+                OutputFormatter.print_success(
+                    f"Set {key} = {_display_value(validated_value, key_info)}"
+                )
             except ValueError as e:
                 OutputFormatter.print_warning(f"Skipped {key}: {e}")
         else:
@@ -503,7 +572,11 @@ def _set_interactive_wizard(config_obj, config_keys, config_file):
         sys.exit(1)
 
 
-def _validate_and_convert_value(key, value, key_info):
+def _validate_and_convert_value(
+    key: str,
+    value: str | int | bool | None,
+    key_info: ConfigKeyInfo,
+) -> str | int | bool | None:
     """Validate and convert a configuration value based on its type."""
     value_type = key_info["type"]
 
@@ -523,11 +596,11 @@ def _validate_and_convert_value(key, value, key_info):
     elif value_type == "int":
         try:
             int_value = int(value_str)
-            if int_value <= 0:
-                raise ValueError("Must be a positive integer")
-            return int_value
         except ValueError:
             raise ValueError("Must be a valid integer")
+        if int_value <= 0:
+            raise ValueError("Must be a positive integer")
+        return int_value
 
     elif value_type == "bool":
         lower_value = value_str.lower()
@@ -565,9 +638,7 @@ def _validate_and_convert_value(key, value, key_info):
         return value_str
 
     elif value_type == "path":
-        # Path validation
-        from pathlib import Path
-
+        # Path validation (Path is imported at module level)
         path = Path(value_str)
         # Don't create directories automatically, just validate the path format
         return str(path)

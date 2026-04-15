@@ -1,16 +1,38 @@
 """
-Herds CLI API Client Module
+HTTP client for the Herds API.
 
-HTTP client for interacting with the Herds API with session management.
+Provides authenticated REST methods for users, events, images, and
+event-user-data.  Two auth modes (web=cookies, mobile=Bearer token) are
+resolved by load_session_auth().  Most methods call load_session_auth(email)
+internally.
+
+Exceptions: login(), create_user(), and google_auth() authenticate directly
+and do not require a prior session.
+
+All error paths go through handle_api_error() which always raises (NoReturn).
+
+Used by CommandBase (core/base.py) and ImageUploader (images.py).
 """
 
 import requests
 import time
 import json
-from typing import Dict, Any, Literal, NoReturn, Optional
-from urllib.parse import urlencode
+from typing import Any, Dict, List, Literal, NoReturn, Optional, overload
 
 from .sessions import SessionManager
+from .types import (
+    ChangePasswordResponse,
+    CreateUserResponse,
+    DeleteEventResponse,
+    DeleteImageResponse,
+    EventUserDataResponse,
+    EventV2,
+    LoginResponse,
+    SessionData,
+    UpdatePasswordResponse,
+    UsageResponse,
+    UserResponse,
+)
 
 
 class APIClient:
@@ -34,7 +56,7 @@ class APIClient:
     def __init__(
         self,
         base_url: str = "http://localhost:8000",
-        session_manager: SessionManager = None,
+        session_manager: Optional[SessionManager] = None,
         no_login: bool = False,
         debug_requests: bool = False,
         timeout: int = 30,
@@ -49,10 +71,24 @@ class APIClient:
         self.session = requests.Session()
 
     def load_session_auth(self, email: str) -> bool:
-        """Load session authentication (cookies or tokens) for authenticated requests."""
+        """Load session authentication for the given account.
+
+        Mutates self.session in place: sets Authorization headers (mobile)
+        or cookies (web) so subsequent requests are authenticated. Called
+        by CommandBase.setup_session() during command initialisation.
+
+        Clears any previous auth state first so that switching between
+        accounts or client types never leaves stale credentials.
+        """
         # If no_login is enabled, skip authentication entirely
         if self.no_login:
             return True
+
+        # Clear previous auth state to prevent stale credentials from
+        # leaking when switching accounts or between mobile/web modes.
+        self.session.headers.pop("Authorization", None)
+        for cookie_name in ("access_token", "refresh_token"):
+            self.session.cookies.set(cookie_name, None)
 
         session_data = self.session_manager.load_session(email)
         if not session_data:
@@ -61,7 +97,7 @@ class APIClient:
         client_type = session_data.get("client_type", "web")
 
         if client_type == "mobile":
-            # Mobile client - use Authorization header
+            # Mobile client - use Authorization header only
             tokens = session_data.get("tokens", {})
             access_token = tokens.get("access_token")
             if access_token:
@@ -69,7 +105,7 @@ class APIClient:
                 return True
             return False
         else:
-            # Web client - use cookies (backwards compatible)
+            # Web client - use cookies only (backwards compatible)
             cookies = session_data.get("cookies", {})
             if not cookies:
                 return False
@@ -79,6 +115,13 @@ class APIClient:
             if "refresh_token" in cookies:
                 self.session.cookies.set("refresh_token", cookies["refresh_token"])
             return True
+
+    @overload
+    def _sanitize_data(self, data: Dict[str, Any], skip_auth_redaction: bool = ...) -> Dict[str, Any]: ...
+    @overload
+    def _sanitize_data(self, data: List[Any], skip_auth_redaction: bool = ...) -> List[Any]: ...
+    @overload
+    def _sanitize_data(self, data: None, skip_auth_redaction: bool = ...) -> None: ...
 
     def _sanitize_data(self, data: Any, skip_auth_redaction: bool = False) -> Any:
         """Sanitize sensitive data for logging."""
@@ -110,20 +153,24 @@ class APIClient:
         else:
             return data
 
-    def _log_request(self, method: str, url: str, **kwargs):
+    def _log_request(self, method: str, url: str, **kwargs: Any) -> None:
         """Log HTTP request details if debug mode is enabled."""
         if not self.debug_requests:
             return
 
         print(f"[DEBUG REQUEST] {method.upper()} {url}")
 
-        # Log headers (sanitized, but show authorization when debug is enabled)
+        # Log headers (sanitized — strip credentials before logging)
         headers = kwargs.get("headers", {})
         if headers or self.session.headers:
             combined_headers = {**self.session.headers, **headers}
-            sanitized_headers = self._sanitize_data(
-                dict(combined_headers), skip_auth_redaction=True
-            )
+            # Normalize Authorization to scheme only so the raw token
+            # never reaches the log, even if _sanitize_data is bypassed.
+            auth_value = combined_headers.get("Authorization", "")
+            if auth_value:
+                scheme = auth_value.split()[0] if auth_value.split() else "Unknown"
+                combined_headers["Authorization"] = f"{scheme} [REDACTED]"
+            sanitized_headers = self._sanitize_data(dict(combined_headers))
             print(f"[DEBUG REQUEST] Headers: {json.dumps(sanitized_headers, indent=2)}")
 
         # Log request body for POST requests
@@ -144,7 +191,7 @@ class APIClient:
                         files_info[key] = "<file data>"
                 print(f"[DEBUG REQUEST] Files: {json.dumps(files_info, indent=2)}")
 
-    def _log_response(self, response: requests.Response, start_time: float):
+    def _log_response(self, response: requests.Response, start_time: float) -> None:
         """Log HTTP response details if debug mode is enabled."""
         if not self.debug_requests:
             return
@@ -208,7 +255,7 @@ class APIClient:
 
     def login(
         self, email: str, password: str, client_type: Literal["web", "mobile"] = "web"
-    ) -> Dict[str, Any]:
+    ) -> LoginResponse:
         """Authenticate with the API and save session."""
         url = f"{self.base_url}/api/users/login"
 
@@ -222,23 +269,20 @@ class APIClient:
             result = response.json()
 
             # Handle different response types based on client_type
-            session_data = {
-                "base_url": self.base_url,
-                "client_type": client_type,
-            }
+            session_data: SessionData
 
             if client_type == "mobile":
                 # Mobile client - tokens are in response body
-                session_data.update(
-                    {
-                        "tokens": {
-                            "access_token": result.get("access_token"),
-                            "refresh_token": result.get("refresh_token"),
-                            "expires_in": result.get("expires_in", 3600),
-                        },
-                        "user_data": result.get("user", {}),
-                    }
-                )
+                session_data = {
+                    "base_url": self.base_url,
+                    "client_type": client_type,
+                    "tokens": {
+                        "access_token": result.get("access_token"),
+                        "refresh_token": result.get("refresh_token"),
+                        "expires_in": result.get("expires_in", 3600),
+                    },
+                    "user_data": result.get("user", {}),
+                }
             else:
                 # Web client - extract cookies from response
                 cookies = {}
@@ -247,12 +291,12 @@ class APIClient:
                 if "refresh_token" in response.cookies:
                     cookies["refresh_token"] = response.cookies["refresh_token"]
 
-                session_data.update(
-                    {
-                        "cookies": cookies,
-                        "user_data": result.get("user", {}),
-                    }
-                )
+                session_data = {
+                    "base_url": self.base_url,
+                    "client_type": client_type,
+                    "cookies": cookies,
+                    "user_data": result.get("user", {}),
+                }
 
             filename = self.session_manager.save_session(email, session_data)
             result["session_filename"] = filename
@@ -261,7 +305,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def create_user(self, email: str, password: str) -> Dict[str, Any]:
+    def create_user(self, email: str, password: str) -> CreateUserResponse:
         """Create a new user account."""
         url = f"{self.base_url}/api/users/create-user"
 
@@ -279,7 +323,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def google_auth(self, id_token: str, nonce: str = None) -> Dict[str, Any]:
+    def google_auth(self, id_token: str, nonce: Optional[str] = None) -> LoginResponse:
         """Authenticate with Google ID token."""
         url = f"{self.base_url}/api/users/auth/google"
 
@@ -293,9 +337,9 @@ class APIClient:
             result = response.json()
 
             # Handle Google auth response (similar to login but mobile-only)
-            session_data = {
+            session_data: SessionData = {
                 "base_url": self.base_url,
-                "client_type": "mobile",  # Google auth only supports mobile client type
+                "client_type": "mobile",
                 "auth_provider": "google",
                 "tokens": {
                     "access_token": result.get("access_token"),
@@ -314,7 +358,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def update_password(self, email: str, new_password: str) -> Dict[str, Any]:
+    def update_password(self, email: str, new_password: str) -> UpdatePasswordResponse:
         """Update password for authenticated user (password reset flow)."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -334,8 +378,8 @@ class APIClient:
         email: str,
         current_password: str,
         new_password: str,
-        refresh_token: str = None,
-    ) -> Dict[str, Any]:
+        refresh_token: Optional[str] = None,
+    ) -> ChangePasswordResponse:
         """Change password for authenticated user (requires current password verification)."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -360,7 +404,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def get_current_user(self, email: str) -> Dict[str, Any]:
+    def get_current_user(self, email: str) -> UserResponse:
         """Get current user information."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -375,7 +419,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def get_current_usage(self, email: str) -> Dict[str, Any]:
+    def get_current_usage(self, email: str) -> UsageResponse:
         """Get current usage statistics for the authenticated user."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -391,31 +435,48 @@ class APIClient:
             self.handle_api_error(response)
 
     def get_events_by_user(
-        self, email: str, user_id: str, version: str = "v2", **params
-    ) -> Dict[str, Any]:
+        self,
+        email: str,
+        user_id: str,
+        *,
+        limit: int = 10,
+        offset: int = 0,
+        timezone: str = "UTC",
+        date_filter: str = "upcoming",
+        sort_by: str = "utc_start",
+        sort_order: str = "asc",
+    ) -> List[EventV2]:
         """Get events for a specific user."""
         # Load session authentication
         if not self.load_session_auth(email):
             raise Exception(f"No valid session found for {email}. Please login first.")
 
-        # Use v2 endpoint (v1 no longer exists)
         url = f"{self.base_url}/api/events/v2"
 
-        # Add query parameters
-        if params:
-            from urllib.parse import urlencode
+        query_params = {
+            "user_id": user_id,
+            "limit": limit,
+            "offset": offset,
+            "timezone": timezone,
+            "date_filter": date_filter,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+        }
 
-            query_string = urlencode(params)
-            url += f"?{query_string}"
-
-        response = self._make_request("GET", url, params={"user_id": user_id})
+        response = self._make_request("GET", url, params=query_params)
 
         if response.status_code == 200:
             return response.json()
         else:
             self.handle_api_error(response)
 
-    def get_event_by_id(self, email: str, event_id: str, **params) -> Dict[str, Any]:
+    def get_event_by_id(
+        self,
+        email: str,
+        event_id: str,
+        *,
+        timezone: str = "UTC",
+    ) -> EventV2:
         """Get a specific event by ID."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -423,12 +484,7 @@ class APIClient:
 
         url = f"{self.base_url}/api/events/{event_id}"
 
-        # Add query parameters if provided
-        if params:
-            query_string = urlencode(params)
-            url += f"?{query_string}"
-
-        response = self._make_request("GET", url)
+        response = self._make_request("GET", url, params={"timezone": timezone})
 
         if response.status_code == 200:
             return response.json()
@@ -436,8 +492,13 @@ class APIClient:
             self.handle_api_error(response)
 
     def get_events_by_image_id(
-        self, email: str, image_id: str, user_id: Optional[str] = None, **params
-    ) -> Dict[str, Any]:
+        self,
+        email: str,
+        image_id: str,
+        *,
+        user_id: Optional[str] = None,
+        timezone: str = "UTC",
+    ) -> List[EventV2]:
         """Get events associated with a specific image ID."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -445,17 +506,11 @@ class APIClient:
 
         url = f"{self.base_url}/api/events/by-image/{image_id}"
 
-        # Add query parameters if provided
-        if params:
-            query_string = urlencode(params)
-            url += f"?{query_string}"
-
-        # Add user_id as query parameter if provided (for no-login mode)
-        request_params = {}
+        query_params: Dict[str, str] = {"timezone": timezone}
         if user_id:
-            request_params["user_id"] = user_id
+            query_params["user_id"] = user_id
 
-        response = self._make_request("GET", url, params=request_params)
+        response = self._make_request("GET", url, params=query_params)
 
         if response.status_code == 200:
             return response.json()
@@ -471,7 +526,7 @@ class APIClient:
         google_calendar_id: Optional[str],
         outlook_calendar_id: Optional[str] = None,
         no_login: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> EventUserDataResponse:
         """Update event user data with calendar integration IDs."""
         # Load session authentication (skip when no_login=True)
         if not no_login and not self.load_session_auth(email):
@@ -504,7 +559,7 @@ class APIClient:
 
     def get_event_user_data(
         self, email: str, event_id: str, user_id: str
-    ) -> Dict[str, Any]:
+    ) -> EventUserDataResponse:
         """Get all user data for a specific event."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -567,7 +622,7 @@ class APIClient:
         else:
             raise Exception(f"API error ({response.status_code}): {detail}")
 
-    def delete_image(self, email: str, image_id: str) -> Dict[str, Any]:
+    def delete_image(self, email: str, image_id: str) -> DeleteImageResponse:
         """Delete an image by ID."""
         # Load session authentication
         if not self.load_session_auth(email):
@@ -593,6 +648,7 @@ class APIClient:
         date_end: Optional[str] = None,
         time_start: Optional[str] = None,
         time_end: Optional[str] = None,
+        is_all_day: Optional[bool] = None,
         street_address: Optional[str] = None,
         city: Optional[str] = None,
         state: Optional[str] = None,
@@ -605,8 +661,12 @@ class APIClient:
         apple_calendar_id: Optional[str] = None,
         google_calendar_id: Optional[str] = None,
         outlook_calendar_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Update an event with new details and calendar integration data."""
+    ) -> EventV2:
+        """Update an event with new details and calendar integration data.
+
+        The field set here mirrors cmd_events.py:_build_event_update_data —
+        keep both in sync when adding or removing event fields.
+        """
         # Load session authentication
         if not self.load_session_auth(email):
             raise Exception(f"No valid session found for {email}. Please login first.")
@@ -633,6 +693,8 @@ class APIClient:
             data["time_start"] = time_start
         if time_end is not None:
             data["time_end"] = time_end
+        if is_all_day is not None:
+            data["is_all_day"] = is_all_day
 
         # Location fields
         if street_address is not None:
@@ -646,7 +708,7 @@ class APIClient:
         if organizer is not None:
             data["organizer"] = organizer
         if email_contact is not None:
-            data["email"] = email_contact
+            data["email_contact"] = email_contact
         if phone is not None:
             data["phone"] = phone
         if website is not None:
@@ -673,7 +735,7 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def delete_event(self, email: str, event_id: str) -> Dict[str, Any]:
+    def delete_event(self, email: str, event_id: str) -> DeleteEventResponse:
         """Delete an event by ID."""
         # Load session authentication
         if not self.load_session_auth(email):

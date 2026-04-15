@@ -9,6 +9,7 @@ Supports user management and image operations with session-based authentication.
 import click
 import sys
 from pathlib import Path
+from typing import Optional
 from zoneinfo import ZoneInfo
 from tzlocal import get_localzone
 import pytz
@@ -43,6 +44,9 @@ class HerdsGroup(click.Group):
         try:
             return super().invoke(ctx)
         except HerdsError:
+            # Contract: helpers in core/base.py print a user-friendly message
+            # *before* raising HerdsError, so we only need to set the exit code
+            # here — no additional output is necessary.
             sys.exit(1)
 
 
@@ -86,7 +90,9 @@ def validate_timezone(timezone: str) -> str:
         ZoneInfo(timezone)
         return timezone
     except Exception:
-        # Fallback to pytz for broader compatibility
+        # zoneinfo uses the OS tz database and may lack entries that pytz
+        # bundles. Fall back to pytz so users on minimal systems (e.g. Alpine
+        # Docker images) still get broad timezone coverage.
         try:
             pytz.timezone(timezone)
             return timezone
@@ -129,6 +135,9 @@ def validate_timezone(timezone: str) -> str:
     is_flag=True,
     help="Show detailed HTTP request/response information (overrides config)",
 )
+# When --timezone is omitted, detect_system_timezone() runs as the Click
+# callback default, so config_obj.timezone is always a valid IANA string
+# (e.g. "America/New_York") by the time any command executes.
 @click.option(
     "--timezone",
     help="Timezone for datetime operations (auto-detected if not specified, overrides config)",
@@ -143,19 +152,22 @@ def validate_timezone(timezone: str) -> str:
 )
 @click.pass_context
 def cli(
-    ctx,
-    config,
-    base_url,
-    output_format,
-    verbose,
-    debug_requests,
-    timezone,
-    default_account,
-):
+    ctx: click.Context,
+    config: Optional[str],
+    base_url: Optional[str],
+    output_format: Optional[str],
+    verbose: bool,
+    debug_requests: bool,
+    timezone: Optional[str],
+    default_account: Optional[str],
+) -> None:
     """Herds CLI Tool - Unified interface for user and image operations."""
     ctx.ensure_object(dict)
 
-    # Allow tests to inject pre-built dependencies via obj={"_initialized": True}
+    # Test injection path: tests invoke cli via CliRunner(cli, obj={...})
+    # with pre-built mocks for api_client, session_manager, etc. The
+    # "_initialized" flag lets us skip config loading and component wiring
+    # entirely, so tests control the full dependency graph.
     if ctx.obj.get("_initialized"):
         return
 

@@ -12,7 +12,7 @@ import requests
 
 from herds_cli.api import APIClient
 from herds_cli.core.config import Config
-from herds_cli.types import EventV2, SessionData
+from herds_cli.types import EventV2, ImageV2Response, SessionData
 from herds_cli.core.exceptions import (
     AmbiguousSessionError,
     APIRequestError,
@@ -48,7 +48,13 @@ class HerdsContext(TypedDict):
 
 
 class CommandBase:
-    """Base class for CLI commands with common session and API handling functionality."""
+    """Shared helper for CLI commands providing session resolution, auth loading,
+    and API request execution.
+
+    Instantiated per-command as ``cmd = CommandBase(ctx)``.  Subclasses
+    EventCommandBase and ImageCommandBase add domain-specific display methods.
+    Not subclassed by individual command functions — they use it by composition.
+    """
 
     def __init__(self, ctx: click.Context) -> None:
         self.ctx = ctx
@@ -104,7 +110,11 @@ class CommandBase:
             **kwargs: Additional arguments for _make_request
 
         Returns:
-            Parsed JSON response data on success, raises APIRequestError on error
+            Parsed JSON response data on success, raises APIRequestError on error.
+            The return type is Dict[str, Any] as a generic wrapper. Callers
+            working with specific endpoints should reference the corresponding
+            TypedDict in herds_cli/types.py for the expected response shape
+            (e.g., DeleteEventResponse, UsageResponse).
         """
         try:
             response = self.api_client._make_request(method, url, **kwargs)
@@ -131,36 +141,53 @@ class CommandBase:
 class APIResponseHandler:
     """Utility class for standardized API response handling."""
 
+    # Shared status-code-to-message defaults for HTTP error responses.
+    _STATUS_DEFAULTS = {
+        400: "Bad request",
+        401: "Authentication required",
+        403: "Access forbidden",
+        404: "Not found",
+        429: "Rate limit exceeded",
+        500: "Internal server error",
+        502: "Bad gateway",
+        503: "Service unavailable",
+        504: "Gateway timeout",
+    }
+
     @staticmethod
-    def handle_error_response(response: requests.Response, operation_name: str) -> None:
-        """Handle HTTP error responses with consistent formatting."""
+    def format_error_message(response: requests.Response) -> str:
+        """Extract a human-readable error string from an HTTP error response.
+
+        Tries response JSON ``detail`` first, falls back to status-code
+        defaults, then raw response text.
+
+        Returns:
+            Formatted string like ``"HTTP 401: Authentication required"``.
+        """
         try:
             error_data = response.json()
             server_error_msg = error_data.get("detail")
             if not server_error_msg:
-                # Provide specific messages for common HTTP status codes
-                status_defaults = {
-                    400: "Bad request",
-                    401: "Authentication required",
-                    403: "Access forbidden",
-                    404: "Not found",
-                    429: "Rate limit exceeded",
-                    500: "Internal server error",
-                    502: "Bad gateway",
-                    503: "Service unavailable",
-                    504: "Gateway timeout",
-                }
-                server_error_msg = status_defaults.get(
+                server_error_msg = APIResponseHandler._STATUS_DEFAULTS.get(
                     response.status_code, f"HTTP {response.status_code} error"
                 )
-            error_msg = f"HTTP {response.status_code}: {server_error_msg}"
-        except:
-            # If we can't parse JSON, include response text if available
+            return f"HTTP {response.status_code}: {server_error_msg}"
+        except Exception:
             error_msg = f"HTTP {response.status_code}"
             if response.text:
                 error_msg += f": {response.text.strip()}"
+            return error_msg
 
+    @staticmethod
+    def handle_error_response(response: requests.Response, operation_name: str) -> str:
+        """Handle HTTP error responses with consistent formatting.
+
+        Returns:
+            The formatted error message string.
+        """
+        error_msg = APIResponseHandler.format_error_message(response)
         OutputFormatter.print_error(f"Failed to {operation_name}: {error_msg}")
+        return error_msg
 
     @staticmethod
     def format_and_output(result: Any, output_format: str, skip_table: bool = False) -> None:
@@ -250,7 +277,7 @@ class EventCommandBase(CommandBase):
 class ImageCommandBase(CommandBase):
     """Base class for image-related commands with common image display logic."""
 
-    def display_image_summary(self, image_data: Dict[str, Any]) -> None:
+    def display_image_summary(self, image_data: ImageV2Response) -> None:
         """Extract and display image information consistently."""
         OutputFormatter.print_info(f"Image Name: {image_data.get('image_name', 'N/A')}")
         OutputFormatter.print_info(

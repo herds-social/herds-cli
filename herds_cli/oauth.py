@@ -12,22 +12,27 @@ import time
 import urllib.parse
 import urllib.request
 import webbrowser
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Optional
+from typing import Any, Optional
+
+from herds_cli.types import GoogleOAuthConfig
 
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
     """HTTP handler for OAuth callback."""
 
-    def __init__(self, *args, oauth_flow=None, **kwargs):
+    def __init__(self, *args, oauth_flow: Optional["GoogleOAuthFlow"] = None, **kwargs: Any) -> None:
         self.oauth_flow = oauth_flow
+        # super().__init__() calls do_GET() synchronously when a request is
+        # pending, so self.oauth_flow must be set *before* this call.
         super().__init__(*args, **kwargs)
 
-    def log_message(self, format, *args):
+    def log_message(self, format: str, *args: Any) -> None:
         """Suppress default HTTP server logs."""
         pass
 
-    def do_GET(self):
+    def do_GET(self) -> None:
         """Handle OAuth callback GET request."""
         try:
             # Parse the callback URL
@@ -70,7 +75,7 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
             self.oauth_flow.error_message = f"Callback error: {str(e)}"
             self._send_response("An error occurred during authentication.")
 
-    def _send_response(self, message: str):
+    def _send_response(self, message: str) -> None:
         """Send HTML response."""
         self.send_response(200)
         self.send_header("Content-type", "text/html")
@@ -78,17 +83,21 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
         self.wfile.write(message.encode("utf-8"))
 
 
+@dataclass
+class OAuthConfig:
+    """Concrete GoogleOAuthConfig implementation for passing OAuth credentials."""
+
+    google_client_id: str
+    google_client_secret: str
+    google_redirect_uri: str = "http://localhost:8080/callback"
+
+
 class GoogleOAuthFlow:
     """Interactive Google OAuth flow using a local HTTP callback server.
 
-    Accepts a config object with attributes:
-        - google_client_id (str): OAuth client ID from Google Cloud Console
-        - google_client_secret (str): OAuth client secret
-        - google_redirect_uri (str, optional): defaults to http://localhost:8080/callback
-
-    There is no formal Protocol for this config — cmd_user.py creates an
-    ad-hoc OAuthConfig class inline. Falls back to HERDS_GOOGLE_* env vars
-    if no config is provided.
+    Accepts a config object satisfying the GoogleOAuthConfig protocol
+    (google_client_id, google_client_secret, google_redirect_uri attributes).
+    Falls back to HERDS_GOOGLE_* env vars if no config is provided.
 
     Flow: starts local HTTP server on port 8080 → opens browser for Google
     consent → receives auth code on /callback → exchanges code for ID token
@@ -98,7 +107,7 @@ class GoogleOAuthFlow:
     If the port is in use, the OAuth flow will fail with an OSError.
     """
 
-    def __init__(self, config=None):
+    def __init__(self, config: Optional[GoogleOAuthConfig] = None):
         # Google OAuth configuration
         if config:
             self.client_id = config.google_client_id

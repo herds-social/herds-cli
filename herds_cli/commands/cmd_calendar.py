@@ -8,13 +8,14 @@ This module contains commands for connecting and managing calendar providers
 import click
 import sys
 import webbrowser
+from typing import Optional
 
 from herds_cli.output import OutputFormatter
 from herds_cli.core.base import CommandBase, APIResponseHandler
 
 
 @click.group()
-def calendar():
+def calendar() -> None:
     """Calendar integration commands (connect, status, calendars, etc.)"""
     pass
 
@@ -35,7 +36,7 @@ def calendar():
     help="Automatically open the OAuth URL in your browser",
 )
 @click.pass_context
-def connect(ctx, email, provider, open_browser):
+def connect(ctx: click.Context, email: Optional[str], provider: str, open_browser: bool) -> None:
     """Start OAuth flow to connect a calendar provider.
 
     Returns an OAuth URL to open in a browser. The server handles the callback.
@@ -82,7 +83,7 @@ def connect(ctx, email, provider, open_browser):
 @calendar.command("status")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.pass_context
-def status(ctx, email):
+def status(ctx: click.Context, email: Optional[str]) -> None:
     """Check current calendar connection status.
 
     Examples:
@@ -114,7 +115,7 @@ def status(ctx, email):
 @calendar.command("list")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.pass_context
-def list_calendars(ctx, email):
+def list_calendars(ctx: click.Context, email: Optional[str]) -> None:
     """List available calendars from the connected provider.
 
     Requires an active calendar connection.
@@ -155,7 +156,7 @@ def list_calendars(ctx, email):
 @click.option("--calendar-id", required=True, help="Calendar ID to use for new events")
 @click.option("--calendar-name", default=None, help="Display name for the calendar")
 @click.pass_context
-def set_calendar(ctx, email, calendar_id, calendar_name):
+def set_calendar(ctx: click.Context, email: Optional[str], calendar_id: str, calendar_name: Optional[str]) -> None:
     """Set which calendar to use for new events.
 
     Examples:
@@ -187,7 +188,7 @@ def set_calendar(ctx, email, calendar_id, calendar_name):
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 @click.pass_context
-def disconnect(ctx, email, yes):
+def disconnect(ctx: click.Context, email: Optional[str], yes: bool) -> None:
     """Disconnect the calendar provider and remove stored tokens.
 
     Examples:
@@ -224,7 +225,7 @@ def disconnect(ctx, email, yes):
 @click.argument("event_id")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.pass_context
-def add_event(ctx, event_id, email):
+def add_event(ctx: click.Context, event_id: str, email: Optional[str]) -> None:
     """Add a Herds event to your connected calendar.
 
     Examples:
@@ -257,19 +258,29 @@ def add_event(ctx, event_id, email):
         error_type = error_data.get("error_type", "")
         message = error_data.get("message", "")
 
+        # 409 already_in_calendar: event was previously added to the user's
+        # calendar — safe to ignore, but surface the existing calendar ID.
         if response.status_code == 409 and error_type == "already_in_calendar":
             OutputFormatter.print_warning("Event is already in your calendar.")
             cal_id = error_data.get("calendar_event_id", "")
             if cal_id:
                 OutputFormatter.print_info(f"  Calendar Event ID: {cal_id}")
+            return
+        # 400 no_calendar_connection: user hasn't run 'calendar connect' yet,
+        # so the server has no OAuth token for their calendar provider.
         elif response.status_code == 400 and error_type == "no_calendar_connection":
             OutputFormatter.print_error(message or "No calendar connected.")
             OutputFormatter.print_info("Run 'calendar connect --provider google' (or outlook) first.")
+        # 400 no_calendar_selected: user connected a provider but hasn't
+        # chosen which calendar to write events to via 'calendar set-calendar'.
         elif response.status_code == 400 and error_type == "no_calendar_selected":
             OutputFormatter.print_error(message or "No calendar selected.")
             OutputFormatter.print_info("Run 'calendar set-calendar --calendar-id <ID>' first.")
+        # 502 calendar_provider_error: the upstream calendar API (Google/Outlook)
+        # returned an error — transient or permissions-related.
         elif response.status_code == 502 and error_type == "calendar_provider_error":
             OutputFormatter.print_error(message or "Calendar provider error.")
+        # 404: the event_id doesn't match any event in the Herds database.
         elif response.status_code == 404:
             OutputFormatter.print_error("Event not found.")
         else:
@@ -285,7 +296,7 @@ def add_event(ctx, event_id, email):
 @click.argument("event_id")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.pass_context
-def remove_event(ctx, event_id, email):
+def remove_event(ctx: click.Context, event_id: str, email: Optional[str]) -> None:
     """Remove a Herds event from your connected calendar.
 
     Idempotent — succeeds even if the event isn't in a calendar.

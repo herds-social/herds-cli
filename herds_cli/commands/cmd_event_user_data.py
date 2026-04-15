@@ -7,6 +7,7 @@ including calendar integration IDs.
 
 import click
 import sys
+from typing import Optional
 
 from herds_cli.output import OutputFormatter
 from herds_cli.core.base import (
@@ -16,7 +17,7 @@ from herds_cli.core.base import (
 
 
 @click.group()
-def event_user_data():
+def event_user_data() -> None:
     """Event user data management commands (update, get, delete-all)"""
     pass
 
@@ -30,8 +31,14 @@ def event_user_data():
 @click.option("--outlook-calendar-id", help="Outlook Calendar event ID")
 @click.pass_context
 def update_event_user_data(
-    ctx, event_id, user_id, email, apple_calendar_id, google_calendar_id, outlook_calendar_id
-):
+    ctx: click.Context,
+    event_id: str,
+    user_id: Optional[str],
+    email: Optional[str],
+    apple_calendar_id: Optional[str],
+    google_calendar_id: Optional[str],
+    outlook_calendar_id: Optional[str],
+) -> None:
     """Update event user data with calendar integration IDs.
 
     Set Apple and/or Google calendar event IDs for an event. Only specified fields are updated;
@@ -101,7 +108,7 @@ def update_event_user_data(
 @click.option("--user-id", help="User ID (autodetected from session if not provided)")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.pass_context
-def get_event_user_data(ctx, event_id, user_id, email):
+def get_event_user_data(ctx: click.Context, event_id: str, user_id: Optional[str], email: Optional[str]) -> None:
     """Get all user data for a specific event."""
     cmd = CommandBase(ctx)
 
@@ -158,7 +165,7 @@ def get_event_user_data(ctx, event_id, user_id, email):
 @click.option("--user-id", help="User ID (autodetected from session if not provided)")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.pass_context
-def delete_all_event_user_data(ctx, event_id, user_id, email):
+def delete_all_event_user_data(ctx: click.Context, event_id: str, user_id: Optional[str], email: Optional[str]) -> None:
     """Delete all user data for a specific event."""
     cmd = CommandBase(ctx)
 

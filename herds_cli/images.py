@@ -2,6 +2,9 @@
 Herds CLI Image Management Module
 
 Handles image upload functionality with session-based authentication.
+
+Note: imports APIResponseHandler lazily inside upload_image() to avoid a
+circular dependency (core/base.py imports ImageUploader from this module).
 """
 
 import os
@@ -11,6 +14,7 @@ from typing import Dict, Any, Optional
 
 from .api import APIClient
 from .sessions import SessionManager
+from .types import UploadResult
 
 
 class ImageUploader:
@@ -18,8 +22,8 @@ class ImageUploader:
 
     def __init__(
         self,
-        api_client: APIClient = None,
-        session_manager: SessionManager = None,
+        api_client: Optional[APIClient] = None,
+        session_manager: Optional[SessionManager] = None,
     ):
         self.api_client = api_client or APIClient()
         self.session_manager = session_manager or SessionManager()
@@ -95,11 +99,11 @@ class ImageUploader:
         file_path: str,
         email: str,
         endpoint: str = "/api/images/v2/upload",
-        timezone: str = None,
-        alg_version: str = None,
+        timezone: Optional[str] = None,
+        alg_version: Optional[str] = None,
         mock_mode: bool = False,
-        ocr_text: str = None,
-        barcode: str = None,
+        ocr_text: Optional[str] = None,
+        barcode: Optional[str] = None,
         add_to_calendar: bool = False,
     ) -> Dict[str, Any]:
         """
@@ -165,43 +169,20 @@ class ImageUploader:
                 result["media_type"] = media_type
                 return result
             else:
-                # Try to parse error response
-                try:
-                    error_data = response.json()
-                    server_error_msg = error_data.get("detail")
-                    if not server_error_msg:
-                        # Provide specific messages for common HTTP status codes
-                        status_defaults = {
-                            400: "Bad request",
-                            401: "Authentication required",
-                            403: "Access forbidden",
-                            404: "Not found",
-                            429: "Rate limit exceeded",
-                            500: "Internal server error",
-                            502: "Bad gateway",
-                            503: "Service unavailable",
-                            504: "Gateway timeout",
-                        }
-                        server_error_msg = status_defaults.get(
-                            response.status_code, f"HTTP {response.status_code} error"
-                        )
-                    error_msg = f"HTTP {response.status_code}: {server_error_msg}"
-                except:
-                    # If we can't parse JSON, include response text if available
-                    error_msg = f"HTTP {response.status_code}"
-                    if response.text:
-                        error_msg += f": {response.text.strip()}"
+                # Lazy import to avoid circular dependency (core/base imports ImageUploader)
+                from herds_cli.core.base import APIResponseHandler
 
+                error_msg = APIResponseHandler.format_error_message(response)
                 raise Exception(f"Upload failed: {error_msg}")
 
     def upload_multiple_images(
         self,
-        file_paths: list,
+        file_paths: list[str],
         email: str,
         endpoint: str = "/api/images/v2/upload",
-        timezone: str = None,
-        alg_version: str = None,
-    ) -> list:
+        timezone: Optional[str] = None,
+        alg_version: Optional[str] = None,
+    ) -> list[UploadResult]:
         """
         Upload multiple image files.
 
@@ -215,7 +196,7 @@ class ImageUploader:
         Returns:
             List of upload results (dicts with success/error info)
         """
-        results = []
+        results: list[UploadResult] = []
 
         for file_path in file_paths:
             try:

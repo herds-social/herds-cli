@@ -2,6 +2,9 @@
 Herds CLI Session Management Module
 
 Manages user sessions with email-based filenames for secure local storage.
+
+Exports HERDS_DIR (~/.herds/), which is also imported by cli.py as the
+default config file directory.
 """
 
 import json
@@ -9,7 +12,7 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import List, Optional
 
 from herds_cli.types import SessionData, SessionListEntry
 
@@ -33,9 +36,6 @@ class SessionManager:
     Each session file contains auth credentials (cookies or Bearer tokens),
     user data, base_url, client_type ("web" or "mobile"), and metadata
     (email, created_at, session_filename).
-
-    Note: save_session() mutates the passed-in session_data dict by adding
-    email, created_at, and session_filename keys via dict.update().
     """
 
     def __init__(self, base_dir: Optional[str] = None):
@@ -63,21 +63,24 @@ class SessionManager:
         sanitized = self.sanitize_email(email)
         return self.base_dir / f"herds_session_{sanitized}"
 
-    def save_session(self, email: str, session_data: Dict[str, Any]) -> str:
-        """Save session data to file."""
+    def save_session(self, email: str, session_data: SessionData) -> str:
+        """Save session data to file.
+
+        Creates a copy of session_data before adding metadata fields,
+        so the caller's dict is never mutated.
+        """
         filename = self.get_session_filename(email)
 
-        session_data.update(
-            {
-                "email": email,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "session_filename": filename.name,
-            }
-        )
+        enriched: SessionData = {
+            **session_data,
+            "email": email,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "session_filename": filename.name,
+        }
 
         try:
             with open(filename, "w") as f:
-                json.dump(session_data, f, indent=2)
+                json.dump(enriched, f, indent=2)
 
             # Set restrictive permissions (owner read/write only)
             os.chmod(filename, 0o600)
@@ -86,8 +89,15 @@ class SessionManager:
         except Exception as e:
             raise Exception(f"Failed to save session: {e}")
 
+    # Keys that must be present for a session file to be considered valid.
+    _REQUIRED_KEYS = {"client_type", "email"}
+
     def load_session(self, email: str) -> Optional[SessionData]:
-        """Load session data for a specific email."""
+        """Load session data for a specific email.
+
+        Returns None if the file is missing, unreadable, or lacks the
+        required keys (client_type, email).
+        """
         filename = self.get_session_filename(email)
 
         if not filename.exists():
@@ -95,12 +105,22 @@ class SessionManager:
 
         try:
             with open(filename, "r") as f:
-                return json.load(f)
+                data = json.load(f)
         except Exception as e:
             console.print(
                 f"[yellow]Warning: Failed to load session {filename}: {e}[/yellow]"
             )
             return None
+
+        missing = self._REQUIRED_KEYS - data.keys()
+        if missing:
+            console.print(
+                f"[yellow]Warning: Session {filename} missing required keys: "
+                f"{', '.join(sorted(missing))}[/yellow]"
+            )
+            return None
+
+        return data
 
     def delete_session(self, email: str) -> bool:
         """Delete session file for a specific email."""

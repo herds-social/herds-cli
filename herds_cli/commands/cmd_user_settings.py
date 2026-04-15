@@ -5,6 +5,7 @@ This module contains commands for managing user preferences and settings.
 """
 
 import re
+from typing import Optional
 
 import click
 import sys
@@ -14,7 +15,7 @@ from herds_cli.core.base import CommandBase, APIResponseHandler
 
 
 @click.group()
-def user_settings():
+def user_settings() -> None:
     """User settings management commands (get, update, etc.)"""
     pass
 
@@ -22,7 +23,7 @@ def user_settings():
 @user_settings.command("get")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.pass_context
-def get_settings(ctx, email):
+def get_settings(ctx: click.Context, email: Optional[str]) -> None:
     """Get user settings and preferences."""
     cmd = CommandBase(ctx)
 
@@ -56,7 +57,7 @@ def get_settings(ctx, email):
     APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
 
 
-def parse_bool_value(ctx, param, value):
+def parse_bool_value(ctx: click.Context, param: click.Parameter, value: str | bool | None) -> bool | None:
     """Parse boolean values from string format like 'True' or 'False'."""
     if value is None:
         return None
@@ -71,7 +72,10 @@ def parse_bool_value(ctx, param, value):
     )
 
 
-# Sentinel to distinguish "not provided" from None
+# Sentinel to distinguish "user did not pass the flag" from "user passed
+# nothing". Click delivers None for both an absent option and an option
+# whose value is genuinely None, so we need a distinct sentinel to tell
+# the two apart — otherwise we'd send a spurious null update to the API.
 _NOT_PROVIDED = object()
 
 RELATIVE_PATTERN = re.compile(
@@ -79,7 +83,7 @@ RELATIVE_PATTERN = re.compile(
 )
 
 
-def parse_date_filter(ctx, param, value):
+def parse_date_filter(ctx: click.Context, param: click.Parameter, value: str | None) -> str | object | None:
     """Parse date filter from CLI shorthand into DSL string.
 
     Supported formats (all produce DSL strings):
@@ -119,7 +123,7 @@ def parse_date_filter(ctx, param, value):
     )
 
 
-def _format_date_filter(date_filter):
+def _format_date_filter(date_filter: str | None) -> str:
     """Format a date_filter DSL string for human-readable display."""
     if not date_filter:
         return "Not set"
@@ -185,16 +189,16 @@ def _format_date_filter(date_filter):
 )
 @click.pass_context
 def update_settings(
-    ctx,
-    email,
-    default_calendar,
-    sort_by,
-    sort_order,
-    filter_by,
-    theme,
-    auto_add_to_calendar,
-    date_filter,
-):
+    ctx: click.Context,
+    email: Optional[str],
+    default_calendar: Optional[str],
+    sort_by: Optional[str],
+    sort_order: Optional[str],
+    filter_by: Optional[str],
+    theme: Optional[str],
+    auto_add_to_calendar: Optional[bool],
+    date_filter: str | object,
+) -> None:
     """Update user settings and preferences.
 
     Only specified fields will be updated; existing values are preserved for unspecified fields.
