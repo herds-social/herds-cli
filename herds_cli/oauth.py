@@ -82,7 +82,7 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
             )
 
         except Exception as e:
-            flow.error_message = f"Callback error: {str(e)}"
+            flow.error_message = f"Callback error: {e!s}"
             self._send_response("An error occurred during authentication.")
 
     def _send_response(self, message: str) -> None:
