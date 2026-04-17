@@ -10,7 +10,7 @@ circular dependency (core/base.py imports ImageUploader from this module).
 import os
 import mimetypes
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, cast
 
 from .api import APIClient
 from .sessions import SessionManager
@@ -208,7 +208,7 @@ class ImageUploader:
                     alg_version=alg_version,
                 )
                 result["status"] = "success"
-                results.append(result)
+                results.append(cast(UploadResult, result))
             except Exception as e:
                 results.append(
                     {"status": "error", "file_path": file_path, "error": str(e)}

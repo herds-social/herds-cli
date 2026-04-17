@@ -237,7 +237,7 @@ def cli(
         "api_client": api_client,
         "image_uploader": image_uploader,
         "output_formatter": OutputFormatter(),
-        "timezone": config_obj.timezone,
+        "timezone": config_obj.timezone or "UTC",
         "format": config_obj.output_format,
         "base_url": config_obj.api_url,
     }

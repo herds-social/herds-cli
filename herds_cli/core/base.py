@@ -253,25 +253,21 @@ class EventCommandBase(CommandBase):
         OutputFormatter.print_info(f"Date: {display_info}")
         OutputFormatter.print_info(f"Category: {category}")
 
-        if event_data.get("event_description"):
-            OutputFormatter.print_info(
-                f"Description: {event_data['event_description']}"
-            )
+        description = event_data.get("event_description")
+        if description:
+            OutputFormatter.print_info(f"Description: {description}")
 
         # Display calendar integration info if available
         user_data = event_data.get("user_data", {})
-        if user_data.get("apple_calendar_id"):
-            OutputFormatter.print_info(
-                f"Apple Calendar ID: {user_data['apple_calendar_id']}"
-            )
-        if user_data.get("google_calendar_id"):
-            OutputFormatter.print_info(
-                f"Google Calendar ID: {user_data['google_calendar_id']}"
-            )
-        if user_data.get("outlook_calendar_id"):
-            OutputFormatter.print_info(
-                f"Outlook Calendar ID: {user_data['outlook_calendar_id']}"
-            )
+        apple_id = user_data.get("apple_calendar_id")
+        if apple_id:
+            OutputFormatter.print_info(f"Apple Calendar ID: {apple_id}")
+        google_id = user_data.get("google_calendar_id")
+        if google_id:
+            OutputFormatter.print_info(f"Google Calendar ID: {google_id}")
+        outlook_id = user_data.get("outlook_calendar_id")
+        if outlook_id:
+            OutputFormatter.print_info(f"Outlook Calendar ID: {outlook_id}")
 
 
 class ImageCommandBase(CommandBase):

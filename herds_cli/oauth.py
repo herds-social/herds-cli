@@ -5,6 +5,7 @@ Handles interactive Google OAuth authentication with local callback server.
 """
 
 import json
+import os
 import secrets
 import string
 import threading
@@ -34,6 +35,15 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         """Handle OAuth callback GET request."""
+        # Defensive guard: the constructor permits oauth_flow=None, but in
+        # production the server only ever instantiates this handler with a
+        # concrete flow. If that contract is ever broken, fail loudly rather
+        # than silently corrupting state.
+        flow = self.oauth_flow
+        if flow is None:
+            self._send_response("Internal error: OAuth flow not configured.")
+            return
+
         try:
             # Parse the callback URL
             parsed_url = urllib.parse.urlparse(self.path)
@@ -44,17 +54,17 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
             error = query_params.get("error", [None])[0]
 
             if error:
-                self.oauth_flow.error_message = f"OAuth error: {error}"
+                flow.error_message = f"OAuth error: {error}"
                 self._send_response("Authentication failed. You can close this window.")
                 return
 
             if not auth_code:
-                self.oauth_flow.error_message = "No authorization code received"
+                flow.error_message = "No authorization code received"
                 self._send_response("Authentication failed. You can close this window.")
                 return
 
             # Exchange code for tokens
-            self.oauth_flow.auth_code = auth_code
+            flow.auth_code = auth_code
 
             # Success response
             self._send_response(
@@ -72,7 +82,7 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
             )
 
         except Exception as e:
-            self.oauth_flow.error_message = f"Callback error: {str(e)}"
+            flow.error_message = f"Callback error: {str(e)}"
             self._send_response("An error occurred during authentication.")
 
     def _send_response(self, message: str) -> None:
@@ -109,6 +119,9 @@ class GoogleOAuthFlow:
 
     def __init__(self, config: Optional[GoogleOAuthConfig] = None):
         # Google OAuth configuration
+        self.client_id: Optional[str]
+        self.client_secret: Optional[str]
+        self.redirect_uri: str
         if config:
             self.client_id = config.google_client_id
             self.client_secret = config.google_client_secret
@@ -118,8 +131,6 @@ class GoogleOAuthFlow:
             )
         else:
             # Fallback to environment variables if no config provided
-            import os
-
             self.client_id = os.getenv("HERDS_GOOGLE_CLIENT_ID")
             self.client_secret = os.getenv("HERDS_GOOGLE_CLIENT_SECRET")
             self.redirect_uri = os.getenv(
@@ -128,9 +139,9 @@ class GoogleOAuthFlow:
         self.scope = "openid email profile"
 
         # OAuth state
-        self.auth_code = None
-        self.error_message = None
-        self.server = None
+        self.auth_code: Optional[str] = None
+        self.error_message: Optional[str] = None
+        self.server: Optional[HTTPServer] = None
 
     def authenticate(self) -> Optional[str]:
         """
