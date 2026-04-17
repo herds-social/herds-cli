@@ -283,7 +283,8 @@ def update_settings(
     OutputFormatter.print_info(
         f"  Auto Add to Calendar: {updated_settings.get('auto_add_to_calendar_enabled', 'Not set')}"
     )
-    date_filter = updated_settings.get("date_filter")
+    date_filter_val = updated_settings.get("date_filter")
+    date_filter = date_filter_val if isinstance(date_filter_val, str) else None
     OutputFormatter.print_info(f"  Date Filter: {_format_date_filter(date_filter)}")
 
     # Output formatted response

@@ -7,7 +7,7 @@ This module contains commands for event CRUD operations and management.
 import click
 import sys
 
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from herds_cli.output import OutputFormatter
 from herds_cli.core.base import (
@@ -142,7 +142,7 @@ def get(ctx: click.Context, event_id: str, email: Optional[str]) -> None:
     )
 
     # Display event information using the base class method
-    cmd.display_event_details(result)
+    cmd.display_event_details(cast(EventV2, result))
 
     # Output formatted response
     APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
@@ -382,7 +382,7 @@ def update_event(
     OutputFormatter.print_success("Successfully updated event")
 
     # Display event information using the base class method
-    cmd.display_event_details(result)
+    cmd.display_event_details(cast(EventV2, result))
 
     # Output formatted response
     APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)

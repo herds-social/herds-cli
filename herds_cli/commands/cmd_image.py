@@ -7,6 +7,7 @@ This module contains commands for image upload, processing, and management.
 import click
 import sys
 from pathlib import Path
+from typing import cast
 
 from herds_cli.output import OutputFormatter
 from herds_cli.core.base import (
@@ -14,6 +15,7 @@ from herds_cli.core.base import (
     ImageCommandBase,
     get_or_detect_session_email,
 )
+from herds_cli.types import ImageV2Response
 
 
 @click.group()
@@ -124,7 +126,7 @@ def get(ctx, image_id, email):
     )
 
     # Display image information using the base class method
-    cmd.display_image_summary(result)
+    cmd.display_image_summary(cast(ImageV2Response, result))
 
     # Output formatted response
     APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)

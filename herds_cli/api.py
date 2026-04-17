@@ -88,7 +88,7 @@ class APIClient:
         # leaking when switching accounts or between mobile/web modes.
         self.session.headers.pop("Authorization", None)
         for cookie_name in ("access_token", "refresh_token"):
-            self.session.cookies.set(cookie_name, None)
+            self.session.cookies.pop(cookie_name, None)
 
         session_data = self.session_manager.load_session(email)
         if not session_data:
