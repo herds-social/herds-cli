@@ -149,7 +149,22 @@ class GoogleOAuthFlow:
 
         Returns:
             str: Google ID token if successful, None if failed
+
+        Raises:
+            ValueError: If client_id or client_secret is missing. This can
+                happen when GoogleOAuthFlow() is constructed without a config
+                and the HERDS_GOOGLE_CLIENT_ID / HERDS_GOOGLE_CLIENT_SECRET
+                env vars are unset. We fail fast here rather than let Google
+                reject the request with an opaque ``invalid_client`` error
+                after the browser has already opened.
         """
+        if not self.client_id or not self.client_secret:
+            raise ValueError(
+                "Google OAuth credentials not configured: set "
+                "HERDS_GOOGLE_CLIENT_ID and HERDS_GOOGLE_CLIENT_SECRET, or "
+                "provide a config with google_client_id and google_client_secret."
+            )
+
         try:
             # Generate state for security
             state = self._generate_state()
