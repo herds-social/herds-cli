@@ -345,3 +345,51 @@ class TestFormatErrorMessage:
         assert msg == "HTTP 404: Event not found"
         captured = capsys.readouterr()
         assert "get event" in captured.out
+
+    def test_reads_herds_message_and_error_type(self):
+        resp = self._make_response(
+            400,
+            {
+                "status": "error",
+                "error_type": "no_calendar_connection",
+                "message": "No calendar connected. Connect a calendar provider first.",
+            },
+        )
+        msg = APIResponseHandler.format_error_message(resp)
+        assert msg == (
+            "HTTP 400: No calendar connected. Connect a calendar provider first. "
+            "[no_calendar_connection]"
+        )
+
+    def test_prefers_message_over_detail_when_both_present(self):
+        resp = self._make_response(
+            400,
+            {"message": "from message field", "detail": "from detail field"},
+        )
+        msg = APIResponseHandler.format_error_message(resp)
+        assert msg == "HTTP 400: from message field"
+
+    def test_appends_error_type_even_when_only_detail_present(self):
+        # Unusual shape: error_type without message but with detail.
+        # Still surface error_type so it's visible in bug reports.
+        resp = self._make_response(
+            422,
+            {"detail": "Validation failed", "error_type": "invalid_input"},
+        )
+        msg = APIResponseHandler.format_error_message(resp)
+        assert msg == "HTTP 422: Validation failed [invalid_input]"
+
+    def test_provider_error_502(self):
+        resp = self._make_response(
+            502,
+            {
+                "status": "error",
+                "error_type": "calendar_provider_error",
+                "message": "Access denied by Google. Ensure the Calendar API is enabled.",
+            },
+        )
+        msg = APIResponseHandler.format_error_message(resp)
+        assert msg == (
+            "HTTP 502: Access denied by Google. Ensure the Calendar API is enabled. "
+            "[calendar_provider_error]"
+        )

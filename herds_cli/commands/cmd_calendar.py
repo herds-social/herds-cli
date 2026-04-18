@@ -129,26 +129,55 @@ def list_calendars(ctx: click.Context, email: Optional[str]) -> None:
     cmd.load_session_auth(email)
 
     url = f"{cmd.api_client.base_url}/api/calendar/list"
-    result = cmd.execute_api_request("GET", url, "Calendars retrieved")
 
-    calendars = result.get("calendars", [])
-    if not calendars:
-        OutputFormatter.print_warning("No calendars found.")
-        return
+    try:
+        response = cmd.api_client._make_request("GET", url)
 
-    OutputFormatter.print_info(f"Found {len(calendars)} calendar(s):")
-    OutputFormatter.print_info("")
-    for i, cal in enumerate(calendars, 1):
-        primary_tag = " (primary)" if cal.get("primary") else ""
-        OutputFormatter.print_info(f"  {i}. {cal.get('name', 'Unnamed')}{primary_tag}")
-        OutputFormatter.print_info(f"     ID: {cal.get('id', 'N/A')}")
+        if response.status_code == 200:
+            result = response.json()
+            calendars = result.get("calendars", [])
+            if not calendars:
+                OutputFormatter.print_warning("No calendars found.")
+                return
 
-    OutputFormatter.print_info("")
-    OutputFormatter.print_info(
-        "Use 'calendar set-calendar --calendar-id <ID>' to select one."
-    )
+            OutputFormatter.print_info(f"Found {len(calendars)} calendar(s):")
+            OutputFormatter.print_info("")
+            for i, cal in enumerate(calendars, 1):
+                primary_tag = " (primary)" if cal.get("primary") else ""
+                OutputFormatter.print_info(f"  {i}. {cal.get('name', 'Unnamed')}{primary_tag}")
+                OutputFormatter.print_info(f"     ID: {cal.get('id', 'N/A')}")
 
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+            OutputFormatter.print_info("")
+            OutputFormatter.print_info(
+                "Use 'calendar set-calendar --calendar-id <ID>' to select one."
+            )
+
+            APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+            return
+
+        # Error path — parse body once, branch on known error types.
+        try:
+            error_data = response.json()
+        except Exception:
+            error_data = {}
+
+        error_type = error_data.get("error_type", "")
+        message = error_data.get("message", "")
+
+        if response.status_code == 400 and error_type == "no_calendar_connection":
+            OutputFormatter.print_error(message or "No calendar connected.")
+            OutputFormatter.print_info(
+                "Run 'herds calendar connect --provider google' (or outlook) to connect."
+            )
+        elif response.status_code == 502 and error_type == "calendar_provider_error":
+            OutputFormatter.print_error(message or "Calendar provider error.")
+        else:
+            APIResponseHandler.handle_error_response(response, "list calendars")
+
+        sys.exit(1)
+    except Exception as e:
+        OutputFormatter.print_error(f"API request failed: {e}")
+        sys.exit(1)
 
 
 @calendar.command("set-calendar")

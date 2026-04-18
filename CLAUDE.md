@@ -38,6 +38,10 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full domain map: module descripti
 - **Errors**: Helpers print a message then raise `HerdsError`. `HerdsGroup` at CLI boundary catches and exits.
 - **Output**: All commands respect `--format json|table`. JSON is default.
 
+## Debugging Cross-Stack Issues
+
+When a bug appears to be caused by the server (wrong status code, missing fields, unhelpful error shape, conflated error types, etc.), **recommend fixing the server first, then update the CLI to match**. The server lives in `~/dev/herds`. Adapting the CLI to paper over a server-side defect locks in the bug — a correct server contract is easier to consume cleanly. Only change the CLI-first if the server behavior is intentional or the fix is genuinely CLI-local.
+
 ## Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — Module map, dependency flow, layer diagram, key interfaces
