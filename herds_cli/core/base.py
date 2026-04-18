@@ -158,20 +158,36 @@ class APIResponseHandler:
     def format_error_message(response: requests.Response) -> str:
         """Extract a human-readable error string from an HTTP error response.
 
-        Tries response JSON ``detail`` first, falls back to status-code
-        defaults, then raw response text.
+        Reads the Herds server error contract first:
+            {"status": "error", "error_type": "<code>", "message": "<human>"}
+        Falls back to FastAPI's ``detail`` (validation errors and any
+        endpoint not using HerdsHTTPException), then a status-code default,
+        then raw response text.
+
+        When an ``error_type`` is present, it is appended in brackets so the
+        machine-readable code is visible to users pasting errors into bug
+        reports.
 
         Returns:
-            Formatted string like ``"HTTP 401: Authentication required"``.
+            Formatted string like
+            ``"HTTP 400: No calendar connected. [no_calendar_connection]"``
+            or ``"HTTP 401: Authentication required"`` when no error_type
+            is present.
         """
         try:
             error_data = response.json()
-            server_error_msg = error_data.get("detail")
+            server_error_msg = error_data.get("message") or error_data.get("detail")
+            error_type = error_data.get("error_type")
+
             if not server_error_msg:
                 server_error_msg = APIResponseHandler._STATUS_DEFAULTS.get(
                     response.status_code, f"HTTP {response.status_code} error"
                 )
-            return f"HTTP {response.status_code}: {server_error_msg}"
+
+            result = f"HTTP {response.status_code}: {server_error_msg}"
+            if error_type:
+                result += f" [{error_type}]"
+            return result
         except Exception:
             error_msg = f"HTTP {response.status_code}"
             if response.text:
