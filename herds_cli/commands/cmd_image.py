@@ -20,6 +20,7 @@ from herds_cli.core.base import (
     ImageCommandBase,
     get_or_detect_session_email,
 )
+from herds_cli.core.exceptions import HerdsError
 from herds_cli.types import EventV2, ImageV2Response
 
 POLL_INTERVAL_SECS = 2.0
@@ -131,7 +132,7 @@ def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode
                 OutputFormatter.print_error(
                     "Upload response missing image_id; cannot poll for status"
                 )
-                sys.exit(1)
+                raise HerdsError("upload response missing image_id")
             api_client: APIClient = ctx.obj["api_client"]
             _poll_and_display_event(api_client, email, image_id, timezone, ctx)
             return
@@ -142,9 +143,12 @@ def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode
             if output:  # Only print if there's content
                 click.echo(output)
 
+    except HerdsError:
+        # Already printed by the raiser; let HerdsGroup convert to exit code.
+        raise
     except Exception as e:
         OutputFormatter.print_error(f"Upload failed: {e}")
-        sys.exit(1)
+        raise HerdsError(f"upload failed: {e}") from e
 
 
 def _fetch_image_status(api_client: "APIClient", image_id: str) -> ImageV2Response:
@@ -190,7 +194,9 @@ def _poll_and_display_event(
                 OutputFormatter.print_error(
                     f"Image resize failed (resize={resize}, thumbnail={thumbnail})"
                 )
-                sys.exit(1)
+                raise HerdsError(
+                    f"image resize failed (resize={resize}, thumbnail={thumbnail})"
+                )
 
             if extraction == "failed":
                 status.stop()
@@ -200,7 +206,7 @@ def _poll_and_display_event(
                     exc_type = exception.get("type", "Unknown")
                     exc_msg = exception.get("message", "")
                     OutputFormatter.print_error(f"  {exc_type}: {exc_msg}")
-                sys.exit(1)
+                raise HerdsError("event extraction failed")
 
             stage1_done = resize == "completed" and thumbnail == "completed"
 
@@ -232,7 +238,7 @@ def _poll_and_display_event(
                     f"Last status: extraction={extraction}, resize={resize}, "
                     f"thumbnail={thumbnail}"
                 )
-                sys.exit(1)
+                raise HerdsError("polling timed out")
 
             time.sleep(POLL_INTERVAL_SECS)
 
