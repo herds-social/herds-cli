@@ -104,7 +104,7 @@ class ImageUploader:
         mock_mode: bool = False,
         ocr_text: Optional[str] = None,
         barcode: Optional[str] = None,
-        add_to_calendar: bool = False,
+        add_to_calendar: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Upload an image file using authenticated session.
@@ -118,6 +118,10 @@ class ImageUploader:
             mock_mode: Enable mock AI processing for testing (bypasses real LLM calls). Defaults to False.
             ocr_text: OCR text to include with the upload (optional)
             barcode: Barcode data to include with the upload (optional)
+            add_to_calendar: Tri-state override for server-side auto-add.
+                True/False force the server's behavior; None omits the field
+                so the server defers to the user's auto_add_to_calendar_enabled
+                setting.
 
         Returns:
             Dict containing upload response
@@ -154,8 +158,11 @@ class ImageUploader:
                 data["ocr_text"] = ocr_text
             if barcode:
                 data["barcode"] = barcode
-            if add_to_calendar:
-                data["add_to_calendar"] = "true"
+            # Tri-state forwarding to match the server's UploadRequest contract:
+            # True/False are explicit overrides; None omits the field so the
+            # server defers to the user's auto_add_to_calendar_enabled setting.
+            if add_to_calendar is not None:
+                data["add_to_calendar"] = "true" if add_to_calendar else "false"
 
             # Make authenticated request
             url = f"{self.api_client.base_url}{endpoint}"

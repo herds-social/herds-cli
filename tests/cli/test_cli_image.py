@@ -293,6 +293,117 @@ class TestUploadPollSuccess:
         assert "No events were extracted" in out
 
 
+class TestUploadPollCalendarStatus:
+    """When the server auto-adds the event to a calendar (either via the
+    --add-to-calendar flag or the user's auto_add_to_calendar_enabled setting),
+    polling should surface that status as part of the per-event display."""
+
+    def test_event_added_to_google_calendar_displayed(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        _create_session(mock_session_manager)
+        cli_obj["config"].output_format = "table"
+        cli_obj["format"] = "table"
+        path = _create_image_file(tmp_path)
+
+        added_event = {
+            **SAMPLE_EVENT,
+            "user_data": {
+                "google_calendar_id": "google-evt-001",
+                "calendar_id": "primary",
+            },
+        }
+
+        cli_obj["api_client"].session.request.side_effect = [
+            _make_response(json_data=UPLOAD_RESPONSE),
+            _poll_response(
+                resize="completed",
+                thumbnail="completed",
+                extraction="completed",
+            ),
+            _make_response(json_data=[added_event]),
+        ]
+
+        with patch("herds_cli.commands.cmd_image.time.sleep"):
+            result = cli_runner.invoke(
+                cli, ["image", "upload", str(path), "--poll"], obj=cli_obj
+            )
+
+        assert result.exit_code == 0, result.output
+        out = strip_ansi(result.output)
+        assert "Added to Google calendar" in out
+        assert "primary" in out
+        assert "google-evt-001" in out
+
+    def test_no_calendar_add_attempted_displayed(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        """When the server didn't attempt an auto-add (no per-upload flag and
+        no user setting), the polling output should still tell the user that
+        the event wasn't added to any calendar — not stay silent."""
+        _create_session(mock_session_manager)
+        cli_obj["config"].output_format = "table"
+        cli_obj["format"] = "table"
+        path = _create_image_file(tmp_path)
+
+        # SAMPLE_EVENT has no user_data → server did not attempt an add.
+        cli_obj["api_client"].session.request.side_effect = [
+            _make_response(json_data=UPLOAD_RESPONSE),
+            _poll_response(
+                resize="completed",
+                thumbnail="completed",
+                extraction="completed",
+            ),
+            _make_response(json_data=[SAMPLE_EVENT]),
+        ]
+
+        with patch("herds_cli.commands.cmd_image.time.sleep"):
+            result = cli_runner.invoke(
+                cli, ["image", "upload", str(path), "--poll"], obj=cli_obj
+            )
+
+        assert result.exit_code == 0, result.output
+        out = strip_ansi(result.output)
+        assert "Not added to a calendar" in out
+
+    def test_calendar_add_failure_surfaced(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        """A failed calendar add (e.g. user disabled auto-add server-side)
+        should appear as a warning per event, but not fail the command —
+        the events themselves were still extracted successfully."""
+        _create_session(mock_session_manager)
+        cli_obj["config"].output_format = "table"
+        cli_obj["format"] = "table"
+        path = _create_image_file(tmp_path)
+
+        failed_event = {
+            **SAMPLE_EVENT,
+            "user_data": {"calendar_add_error": "NO_CALENDAR_CONNECTION"},
+        }
+
+        cli_obj["api_client"].session.request.side_effect = [
+            _make_response(json_data=UPLOAD_RESPONSE),
+            _poll_response(
+                resize="completed",
+                thumbnail="completed",
+                extraction="completed",
+            ),
+            _make_response(json_data=[failed_event]),
+        ]
+
+        with patch("herds_cli.commands.cmd_image.time.sleep"):
+            result = cli_runner.invoke(
+                cli, ["image", "upload", str(path), "--poll"], obj=cli_obj
+            )
+
+        # Extraction succeeded → exit 0, even though calendar add failed.
+        assert result.exit_code == 0, result.output
+        out = strip_ansi(result.output)
+        assert "Calendar add failed" in out
+        assert "NO_CALENDAR_CONNECTION" in out
+
+
 class TestUploadPollFailures:
     """Failure paths: each must exit non-zero and surface useful diagnostics."""
 
@@ -444,6 +555,61 @@ class TestUploadPollFailures:
         assert result.exit_code != 0
         out = strip_ansi(result.output)
         assert "Failed to fetch image status" in out
+
+
+class TestUploadAddToCalendarFlag:
+    """The CLI flag is tri-state, mirroring the server's UploadRequest contract:
+    --add-to-calendar → 'true', --no-add-to-calendar → 'false', omitted → field
+    is not sent at all (server defers to the user setting)."""
+
+    def _run_upload(self, cli_runner, cli_obj, mock_session_manager, tmp_path, *flag_args):
+        _create_session(mock_session_manager)
+        cli_obj["config"].output_format = "table"
+        cli_obj["format"] = "table"
+        path = _create_image_file(tmp_path)
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            json_data=UPLOAD_RESPONSE
+        )
+        return cli_runner.invoke(
+            cli, ["image", "upload", str(path), *flag_args], obj=cli_obj
+        )
+
+    def _form_data(self, cli_obj):
+        call_args = cli_obj["api_client"].session.request.call_args
+        return call_args.kwargs.get("data") or call_args[1].get("data", {})
+
+    def test_add_to_calendar_sends_true(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        result = self._run_upload(
+            cli_runner, cli_obj, mock_session_manager, tmp_path,
+            "--add-to-calendar",
+        )
+        assert result.exit_code == 0, result.output
+        assert self._form_data(cli_obj).get("add_to_calendar") == "true"
+        assert "Requesting auto-add to calendar" in strip_ansi(result.output)
+
+    def test_no_add_to_calendar_sends_false(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        result = self._run_upload(
+            cli_runner, cli_obj, mock_session_manager, tmp_path,
+            "--no-add-to-calendar",
+        )
+        assert result.exit_code == 0, result.output
+        assert self._form_data(cli_obj).get("add_to_calendar") == "false"
+        assert "Skipping calendar auto-add" in strip_ansi(result.output)
+
+    def test_omitted_does_not_send_field(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        """Default behavior — neither flag — must NOT send add_to_calendar.
+        Otherwise we'd silently override the user's auto-add setting."""
+        result = self._run_upload(
+            cli_runner, cli_obj, mock_session_manager, tmp_path,
+        )
+        assert result.exit_code == 0, result.output
+        assert "add_to_calendar" not in self._form_data(cli_obj)
 
 
 class TestUploadDefaultBehavior:

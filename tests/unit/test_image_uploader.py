@@ -137,6 +137,43 @@ class TestUploadImage:
         assert data["barcode"] == "12345"
         assert data["add_to_calendar"] == "true"
 
+    def test_upload_add_to_calendar_false_sends_string(
+        self, uploader, mock_session_manager, tmp_path
+    ):
+        """add_to_calendar=False forwards an explicit 'false' so the server
+        records an *override* rather than deferring to the user setting."""
+        _create_image_file(tmp_path, "flyer.jpg")
+        self._setup_auth_and_response(uploader, mock_session_manager)
+
+        uploader.upload_image(
+            str(tmp_path / "flyer.jpg"),
+            "test@example.com",
+            add_to_calendar=False,
+        )
+
+        call_args = uploader.api_client.session.request.call_args
+        data = call_args.kwargs.get("data") or call_args[1].get("data", {})
+        assert data["add_to_calendar"] == "false"
+
+    def test_upload_add_to_calendar_none_omits_field(
+        self, uploader, mock_session_manager, tmp_path
+    ):
+        """add_to_calendar=None (the default) must omit the form field entirely
+        so the server falls through to the user's auto-add setting. Sending
+        'false' here would *override* the user setting — wrong default."""
+        _create_image_file(tmp_path, "flyer.jpg")
+        self._setup_auth_and_response(uploader, mock_session_manager)
+
+        uploader.upload_image(
+            str(tmp_path / "flyer.jpg"),
+            "test@example.com",
+            # add_to_calendar omitted — should default to None
+        )
+
+        call_args = uploader.api_client.session.request.call_args
+        data = call_args.kwargs.get("data") or call_args[1].get("data", {})
+        assert "add_to_calendar" not in data
+
     def test_upload_no_session_raises(self, uploader, tmp_path):
         _create_image_file(tmp_path, "flyer.jpg")
         with pytest.raises(Exception, match="No valid session"):

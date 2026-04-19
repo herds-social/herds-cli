@@ -59,7 +59,14 @@ def image():
     help="Barcode data to include with the upload",
 )
 @click.option(
-    "--add-to-calendar", is_flag=True, help="Request auto-add to connected calendar"
+    "--add-to-calendar/--no-add-to-calendar",
+    "add_to_calendar",
+    default=None,
+    help=(
+        "Tri-state override for server-side calendar auto-add: "
+        "--add-to-calendar forces an add, --no-add-to-calendar forces a skip, "
+        "and omitting both defers to your auto_add_to_calendar_enabled user setting."
+    ),
 )
 @click.option(
     "--poll",
@@ -99,8 +106,10 @@ def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode
             OutputFormatter.print_info(f"Using algorithm version: {alg_version}")
         if mock:
             OutputFormatter.print_info("Using mock AI processing mode")
-        if add_to_calendar:
+        if add_to_calendar is True:
             OutputFormatter.print_info("Requesting auto-add to calendar")
+        elif add_to_calendar is False:
+            OutputFormatter.print_info("Skipping calendar auto-add (overrides user setting)")
         result = image_uploader.upload_image(
             file_path,
             email,

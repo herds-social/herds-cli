@@ -134,11 +134,25 @@ class ContactInfo(TypedDict, total=False):
 
 
 class EventUserData(TypedDict, total=False):
-    """Per-user calendar integration IDs attached to an event."""
+    """Per-user calendar integration data attached to an event.
+
+    Populated by either the manual /api/event-user-data endpoint or by the
+    server's auto-add flow (gated by the user's auto_add_to_calendar_enabled
+    setting and/or the per-upload add_to_calendar flag).
+
+    - {provider}_calendar_id: the event's ID *inside* the user's calendar
+      (proves the add succeeded for that provider).
+    - calendar_id: the *target* calendar (e.g. "primary") the event went into.
+    - calendar_add_error: error code if the auto-add was attempted but failed
+      (e.g. AUTO_ADD_DISABLED, NO_CALENDAR_CONNECTION). Mutually exclusive
+      with the *_calendar_id fields in practice.
+    """
 
     apple_calendar_id: str
     google_calendar_id: str
     outlook_calendar_id: str
+    calendar_id: str
+    calendar_add_error: str
 
 
 class EventV2(TypedDict, total=False):

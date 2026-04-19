@@ -273,17 +273,46 @@ class EventCommandBase(CommandBase):
         if description:
             OutputFormatter.print_info(f"Description: {description}")
 
-        # Display calendar integration info if available
+        # Display calendar add status. Data-driven: the server populates these
+        # fields whenever it attempts an auto-add (either via the per-upload
+        # add_to_calendar flag or the user's auto_add_to_calendar_enabled
+        # setting), so we don't gate display on any CLI flag — if the data
+        # is there, we show it.
         user_data = event_data.get("user_data", {})
-        apple_id = user_data.get("apple_calendar_id")
-        if apple_id:
-            OutputFormatter.print_info(f"Apple Calendar ID: {apple_id}")
         google_id = user_data.get("google_calendar_id")
-        if google_id:
-            OutputFormatter.print_info(f"Google Calendar ID: {google_id}")
         outlook_id = user_data.get("outlook_calendar_id")
-        if outlook_id:
-            OutputFormatter.print_info(f"Outlook Calendar ID: {outlook_id}")
+        apple_id = user_data.get("apple_calendar_id")
+        target_calendar = user_data.get("calendar_id")
+        calendar_error = user_data.get("calendar_add_error")
+
+        # Pick the populated provider (in practice only one is set per event).
+        provider_id_pairs = [
+            ("Google", google_id),
+            ("Outlook", outlook_id),
+            ("Apple", apple_id),
+        ]
+        added_provider, added_event_id = next(
+            ((name, eid) for name, eid in provider_id_pairs if eid),
+            (None, None),
+        )
+
+        if added_provider:
+            target_suffix = (
+                f" (calendar: {target_calendar})" if target_calendar else ""
+            )
+            OutputFormatter.print_info(
+                f"Added to {added_provider} calendar{target_suffix} "
+                f"— event id: {added_event_id}"
+            )
+        elif calendar_error:
+            OutputFormatter.print_warning(f"Calendar add failed: {calendar_error}")
+        else:
+            # Always show *something* about calendar status — silence here
+            # would leave the user wondering whether the add was attempted.
+            # The data alone can't tell us *why* (no per-upload flag vs. the
+            # user setting being off vs. no provider connected), so the
+            # message stays neutral.
+            OutputFormatter.print_info("Not added to a calendar")
 
 
 class ImageCommandBase(CommandBase):

@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from herds_cli.core.base import (
+    EventCommandBase,
     get_or_detect_session_email,
     validate_session_exists,
     extract_user_id_from_session,
@@ -215,6 +216,120 @@ class TestDisplayEventsSummary:
         display_events_summary(events)
         captured = capsys.readouterr()
         assert "Minimal Event" in captured.out
+
+
+class TestDisplayEventDetails:
+    """Unit tests for EventCommandBase.display_event_details, focused on
+    the calendar add status block. Calendar status is *data-driven*:
+    if the server populated `user_data.{provider}_calendar_id` (success)
+    or `user_data.calendar_add_error` (failure), we surface it — regardless
+    of whether the CLI passed --add-to-calendar, since the server's per-user
+    auto_add_to_calendar_enabled setting can trigger an add independently."""
+
+    def _make_cmd(self):
+        """Build an EventCommandBase with a minimal stub ctx.
+
+        display_event_details only reads from `event_data`, never from `self`,
+        so a stub ctx is sufficient — we just need __init__ to succeed."""
+        ctx = MagicMock()
+        config = MagicMock()
+        config.output_format = "table"
+        ctx.obj = {
+            "config": config,
+            "session_manager": MagicMock(),
+            "api_client": MagicMock(),
+        }
+        return EventCommandBase(ctx)
+
+    BASE_EVENT = {
+        "title": "Summer Concert",
+        "category_level_1": "Music",
+        "date_info": {"raw": {"date": "2026-07-15"}, "local": {}},
+        "location": {"city": "Austin", "state": "TX"},
+        "contact": {"organizer": "Live Nation"},
+    }
+
+    def test_no_calendar_data_shows_not_added(self, capsys):
+        """When user_data is absent or empty, an explicit 'Not added' line
+        appears so the user isn't left wondering whether the add ran."""
+        self._make_cmd().display_event_details(self.BASE_EVENT)
+        out = capsys.readouterr().out
+        assert "Summer Concert" in out  # sanity: rest of the display ran
+        assert "Not added to a calendar" in out
+        # The success/failure variants must NOT also appear in this state.
+        assert "Added to" not in out
+        assert "Calendar add failed" not in out
+
+    def test_empty_user_data_shows_not_added(self, capsys):
+        """An explicit empty user_data dict behaves the same as missing one."""
+        event = {**self.BASE_EVENT, "user_data": {}}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().out
+        assert "Not added to a calendar" in out
+
+    def test_google_add_success_with_target(self, capsys):
+        """Google add: shows provider, target calendar, and event id."""
+        event = {
+            **self.BASE_EVENT,
+            "user_data": {
+                "google_calendar_id": "g-evt-123",
+                "calendar_id": "primary",
+            },
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().out
+        assert "Added to Google calendar" in out
+        assert "primary" in out
+        assert "g-evt-123" in out
+
+    def test_outlook_add_success_no_target(self, capsys):
+        """Outlook add without a target calendar id: omit the parenthetical."""
+        event = {
+            **self.BASE_EVENT,
+            "user_data": {"outlook_calendar_id": "o-evt-456"},
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().out
+        assert "Added to Outlook calendar" in out
+        assert "o-evt-456" in out
+        assert "(calendar:" not in out  # no target → no parenthetical
+
+    def test_apple_add_success(self, capsys):
+        event = {
+            **self.BASE_EVENT,
+            "user_data": {"apple_calendar_id": "a-evt-789"},
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().out
+        assert "Added to Apple calendar" in out
+        assert "a-evt-789" in out
+
+    def test_add_failure_shows_error_code(self, capsys):
+        """When the auto-add was attempted but failed, surface the error code
+        as a warning so the user knows *why* the event isn't in their calendar."""
+        event = {
+            **self.BASE_EVENT,
+            "user_data": {"calendar_add_error": "NO_CALENDAR_CONNECTION"},
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().out
+        assert "Calendar add failed" in out
+        assert "NO_CALENDAR_CONNECTION" in out
+
+    def test_success_takes_precedence_over_error(self, capsys):
+        """Defensive: if both a success ID and an error are somehow set,
+        prefer the success message — the event IS in the calendar."""
+        event = {
+            **self.BASE_EVENT,
+            "user_data": {
+                "google_calendar_id": "g-evt-1",
+                "calendar_add_error": "STALE_ERROR",
+            },
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().out
+        assert "Added to Google calendar" in out
+        assert "Calendar add failed" not in out
 
 
 class TestAPIResponseHandler:
