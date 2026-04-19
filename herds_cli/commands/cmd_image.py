@@ -6,16 +6,24 @@ This module contains commands for image upload, processing, and management.
 
 import click
 import sys
+import time
 from pathlib import Path
 from typing import cast
 
-from herds_cli.output import OutputFormatter
+from rich.status import Status
+
+from herds_cli.api import APIClient
+from herds_cli.output import OutputFormatter, console
 from herds_cli.core.base import (
     APIResponseHandler,
+    EventCommandBase,
     ImageCommandBase,
     get_or_detect_session_email,
 )
-from herds_cli.types import ImageV2Response
+from herds_cli.types import EventV2, ImageV2Response
+
+POLL_INTERVAL_SECS = 2.0
+POLL_TIMEOUT_SECS = 180.0
 
 
 @click.group()
@@ -53,13 +61,30 @@ def image():
 @click.option(
     "--add-to-calendar", is_flag=True, help="Request auto-add to connected calendar"
 )
+@click.option(
+    "--poll",
+    is_flag=True,
+    help="Wait for processing to complete and display the extracted event(s)",
+)
 @click.pass_context
-def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode, add_to_calendar):
+def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode, add_to_calendar, poll):
     """Upload an image file with optional algorithm version, mock mode, OCR text, and barcode selection."""
     session_manager = ctx.obj["session_manager"]
     image_uploader = ctx.obj["image_uploader"]
     output_format = ctx.obj["format"]
     timezone = ctx.obj["timezone"]
+
+    # --poll streams human-readable progress to the console; mixing that with
+    # JSON output would corrupt the JSON stream. Combined support can come
+    # later (would emit one JSON blob containing image + extracted events).
+    # We only reject when the user *explicitly* asked for JSON — silently
+    # ignoring the config default (output_format="json") keeps `--poll` usable
+    # without forcing every invocation to also pass `--format table`.
+    format_explicit = ctx.obj.get("_format_explicit", False)
+    if poll and output_format == "json" and format_explicit:
+        raise click.UsageError(
+            "--poll cannot be combined with --format json (not yet supported)"
+        )
 
     # Get email from session
     config = ctx.obj["config"]
@@ -91,6 +116,17 @@ def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode
         OutputFormatter.print_success(f"Successfully uploaded {Path(file_path).name}")
         OutputFormatter.print_info(f"Media type: {result.get('media_type', 'unknown')}")
 
+        if poll:
+            image_id = result.get("image_id")
+            if not image_id:
+                OutputFormatter.print_error(
+                    "Upload response missing image_id; cannot poll for status"
+                )
+                sys.exit(1)
+            api_client: APIClient = ctx.obj["api_client"]
+            _poll_and_display_event(api_client, email, image_id, timezone, ctx)
+            return
+
         # Output formatted response
         if output_format != "table":  # table format already printed above
             output = OutputFormatter.format_output(result, output_format)
@@ -100,6 +136,111 @@ def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode
     except Exception as e:
         OutputFormatter.print_error(f"Upload failed: {e}")
         sys.exit(1)
+
+
+def _fetch_image_status(api_client: "APIClient", image_id: str) -> ImageV2Response:
+    """Fetch one snapshot of the image record (status fields included)."""
+    url = f"{api_client.base_url}/api/images/v2/{image_id}"
+    response = api_client._make_request("GET", url)
+    if response.status_code != 200:
+        error_msg = APIResponseHandler.format_error_message(response)
+        raise RuntimeError(f"Failed to fetch image status: {error_msg}")
+    return cast(ImageV2Response, response.json())
+
+
+def _poll_and_display_event(
+    api_client: "APIClient",
+    email: str,
+    image_id: str,
+    timezone: str,
+    ctx: click.Context,
+) -> None:
+    """Poll an in-flight upload through resize → extraction, then print events.
+
+    Stages tracked separately because they happen in series server-side:
+      1. resize_status + thumbnail_status (image variants written to S3)
+      2. image_extraction_status (LLM extracts event metadata)
+
+    Failures at either stage exit non-zero with the server's error details.
+    """
+    deadline = time.monotonic() + POLL_TIMEOUT_SECS
+    stage1_announced_done = False
+
+    with Status(
+        "Waiting for image processing...", console=console, spinner="dots"
+    ) as status:
+        while True:
+            image = _fetch_image_status(api_client, image_id)
+
+            resize = image.get("resize_status", "processing")
+            thumbnail = image.get("thumbnail_status", "processing")
+            extraction = image.get("image_extraction_status", "processing")
+
+            if resize == "failed" or thumbnail == "failed":
+                status.stop()
+                OutputFormatter.print_error(
+                    f"Image resize failed (resize={resize}, thumbnail={thumbnail})"
+                )
+                sys.exit(1)
+
+            if extraction == "failed":
+                status.stop()
+                OutputFormatter.print_error("Event extraction failed")
+                exception = image.get("extraction_exception")
+                if exception:
+                    exc_type = exception.get("type", "Unknown")
+                    exc_msg = exception.get("message", "")
+                    OutputFormatter.print_error(f"  {exc_type}: {exc_msg}")
+                sys.exit(1)
+
+            stage1_done = resize == "completed" and thumbnail == "completed"
+
+            if extraction == "completed":
+                status.stop()
+                if not stage1_announced_done:
+                    OutputFormatter.print_success("Image resized")
+                OutputFormatter.print_success("Event extracted")
+                break
+
+            if stage1_done:
+                if not stage1_announced_done:
+                    # Print once when we transition out of stage 1 — gives the
+                    # user a permanent record above the live spinner.
+                    status.stop()
+                    OutputFormatter.print_success("Image resized")
+                    stage1_announced_done = True
+                    status.start()
+                status.update("Extracting event details...")
+            else:
+                status.update(
+                    f"Resizing image (resize={resize}, thumbnail={thumbnail})..."
+                )
+
+            if time.monotonic() >= deadline:
+                status.stop()
+                OutputFormatter.print_error(
+                    f"Polling timed out after {POLL_TIMEOUT_SECS:.0f}s. "
+                    f"Last status: extraction={extraction}, resize={resize}, "
+                    f"thumbnail={thumbnail}"
+                )
+                sys.exit(1)
+
+            time.sleep(POLL_INTERVAL_SECS)
+
+    # Extraction complete — fetch and display the extracted events.
+    OutputFormatter.print_info("Fetching extracted events...")
+    events = api_client.get_events_by_image_id(email, image_id, timezone=timezone)
+
+    if not events:
+        OutputFormatter.print_warning("No events were extracted from this image")
+        return
+
+    OutputFormatter.print_success(f"Extracted {len(events)} event(s)")
+    event_cmd = EventCommandBase(ctx)
+    for i, event in enumerate(events, 1):
+        if len(events) > 1:
+            OutputFormatter.print_info(f"--- Event {i} of {len(events)} ---")
+        event_cmd.display_event_details(cast(EventV2, event))
 
 
 @image.command()

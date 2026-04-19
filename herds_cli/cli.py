@@ -242,6 +242,11 @@ def cli(
         "base_url": config_obj.api_url,
     }
     ctx.obj.update(herds_ctx)
+    # Track whether --format was passed on the command line (vs. inherited
+    # from config defaults). Commands that conditionally reject combinations
+    # of flags (e.g. `image upload --poll` vs. an explicit `--format json`)
+    # use this to avoid false-positive rejections of the default value.
+    ctx.obj["_format_explicit"] = output_format is not None
 
 
 # Register command groups
