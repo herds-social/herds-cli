@@ -753,3 +753,50 @@ class TestUploadAuthFailure:
         out = strip_ansi(result.output)
         assert "Uploading" not in out
         assert "Using timezone" not in out
+
+    def test_upload_with_poll_auto_refreshes_then_polls_to_completion(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path, mock_api_client,
+    ):
+        """The auto-refresh path composes correctly with --poll: a stale
+        access_token triggers a transparent refresh during the upload POST,
+        and the subsequent polling GETs proceed normally to render events.
+        Pins that the recursive _make_request retry doesn't interfere with
+        the polling loop in cmd_image."""
+        self._create_session_with_refresh(mock_session_manager)
+        cli_obj["config"].output_format = "table"
+        cli_obj["format"] = "table"
+        flyer = _create_image_file(tmp_path)
+
+        unauthorized = _make_response(status_code=401, json_data={"detail": "expired"})
+        refreshed = _make_response(json_data={
+            "access_token": "new", "refresh_token": "new-rfr", "expires_in": 3600,
+        })
+        # Sequence after refresh: upload-200, one poll showing all stages
+        # completed, then the events-by-image GET.
+        mock_api_client.session.request.side_effect = [
+            unauthorized,
+            refreshed,
+            _make_response(json_data=UPLOAD_RESPONSE),
+            _poll_response(
+                resize="completed",
+                thumbnail="completed",
+                extraction="completed",
+            ),
+            _make_response(json_data=[SAMPLE_EVENT]),
+        ]
+
+        with patch("herds_cli.commands.cmd_image.time.sleep"):
+            result = cli_runner.invoke(
+                cli, ["image", "upload", str(flyer), "--poll"], obj=cli_obj,
+            )
+
+        assert result.exit_code == 0, strip_ansi(result.output)
+        out = strip_ansi(result.output)
+        # Refresh happened invisibly; user sees only normal upload+poll output.
+        assert "Session expired" not in out
+        assert "Successfully uploaded" in out
+        assert "Image resized" in out
+        assert "Event extracted" in out
+        assert "Summer Concert" in out  # rendered from SAMPLE_EVENT
+        # Sanity: 5 calls total — original 401, refresh, retried upload, poll, events.
+        assert mock_api_client.session.request.call_count == 5
