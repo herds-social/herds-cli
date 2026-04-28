@@ -69,6 +69,8 @@ class APIClient:
         self.timeout = timeout
         self.app_api_key = app_api_key
         self.session = requests.Session()
+        # Set by load_session_auth; consumed by _make_request for refresh-on-401.
+        self._current_session_email: Optional[str] = None
 
     def load_session_auth(self, email: str) -> bool:
         """Load session authentication for the given account.
@@ -79,8 +81,12 @@ class APIClient:
 
         Clears any previous auth state first so that switching between
         accounts or client types never leaves stale credentials.
+
+        Also records the email in self._current_session_email so that
+        _make_request can attempt a refresh-on-401 against the right
+        session. no_login mode and a missing session both leave the
+        field as None.
         """
-        # If no_login is enabled, skip authentication entirely
         if self.no_login:
             return True
 
@@ -97,15 +103,14 @@ class APIClient:
         client_type = session_data.get("client_type", "web")
 
         if client_type == "mobile":
-            # Mobile client - use Authorization header only
             tokens = session_data.get("tokens", {})
             access_token = tokens.get("access_token")
             if access_token:
                 self.session.headers.update({"Authorization": f"Bearer {access_token}"})
+                self._current_session_email = email
                 return True
             return False
         else:
-            # Web client - use cookies only (backwards compatible)
             cookies = session_data.get("cookies", {})
             if not cookies:
                 return False
@@ -114,6 +119,7 @@ class APIClient:
                 self.session.cookies.set("access_token", cookies["access_token"])
             if "refresh_token" in cookies:
                 self.session.cookies.set("refresh_token", cookies["refresh_token"])
+            self._current_session_email = email
             return True
 
     @overload

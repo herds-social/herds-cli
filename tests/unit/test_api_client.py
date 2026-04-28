@@ -77,6 +77,31 @@ class TestLoadSessionAuth:
         result = client.load_session_auth("anyone@example.com")
         assert result is True
 
+    def test_sets_current_session_email_on_success(self, mock_api_client, mock_session_manager):
+        mock_session_manager.save_session("test@example.com", {
+            "client_type": "mobile",
+            "tokens": {"access_token": "tk"},
+            "user_data": {"id": "u1", "email": "test@example.com"},
+        })
+        mock_api_client.session = requests.Session()
+
+        mock_api_client.load_session_auth("test@example.com")
+
+        assert mock_api_client._current_session_email == "test@example.com"
+
+    def test_does_not_set_current_session_email_when_session_missing(self, mock_api_client):
+        mock_api_client.load_session_auth("nobody@example.com")
+        assert mock_api_client._current_session_email is None
+
+    def test_no_login_mode_does_not_set_current_session_email(self, mock_session_manager):
+        client = APIClient(
+            base_url="http://localhost:8000",
+            session_manager=mock_session_manager,
+            no_login=True,
+        )
+        client.load_session_auth("anyone@example.com")
+        assert client._current_session_email is None
+
 
 class TestMakeRequest:
     def test_success_returns_response(self, mock_api_client):
