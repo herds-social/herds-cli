@@ -190,22 +190,22 @@ class APIClient:
         new_refresh = body.get("refresh_token")
         new_expires_in = body.get("expires_in")
 
-        # Persist rotated tokens to the session file. Mutate a copy so we
-        # don't leak partial state if save_session raises.
+        # Persist rotated tokens to the session file. session_data is a
+        # fresh deserialization from disk owned by this function, so we
+        # mutate it in place — if save_session raises, the local goes out
+        # of scope and nothing else observes the partial state.
         if client_type == "mobile":
-            tokens = dict(session_data.get("tokens", {}))
+            tokens = session_data.setdefault("tokens", {})
             tokens["access_token"] = new_access
             if new_refresh:
                 tokens["refresh_token"] = new_refresh
             if new_expires_in is not None:
                 tokens["expires_in"] = new_expires_in
-            session_data["tokens"] = tokens
         else:
-            cookies = dict(session_data.get("cookies", {}))
+            cookies = session_data.setdefault("cookies", {})
             cookies["access_token"] = new_access
             if new_refresh:
                 cookies["refresh_token"] = new_refresh
-            session_data["cookies"] = cookies
 
         self.session_manager.save_session(email, session_data)
 
