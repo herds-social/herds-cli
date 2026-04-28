@@ -158,15 +158,21 @@ class APIClient:
             return False
 
         url = f"{self.base_url}/api/users/refresh-token"
+        # Log via the same helpers as _make_request so --debug-requests sees
+        # the refresh round-trip. We call session.request directly (not
+        # self._make_request) to avoid the 401-retry loop calling us back
+        # recursively when Task 4's auto-refresh wiring lands.
+        request_kwargs = {
+            "json": {"refresh_token": refresh_token, "client_type": client_type},
+            "timeout": self.timeout,
+        }
+        self._log_request("POST", url, **request_kwargs)
+        start_time = time.time()
         try:
-            response = self.session.request(
-                "POST",
-                url,
-                json={"refresh_token": refresh_token, "client_type": client_type},
-                timeout=self.timeout,
-            )
+            response = self.session.request("POST", url, **request_kwargs)
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
             return False
+        self._log_response(response, start_time)
 
         if response.status_code != 200:
             return False

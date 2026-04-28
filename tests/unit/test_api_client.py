@@ -146,9 +146,6 @@ class TestRefreshSessionAuth:
         mock_api_client.load_session_auth("test@example.com")
 
         # Replace session.request with a mock that returns the new tokens
-        with_mock = MagicMock()
-        with_mock.session = MagicMock()
-        # Use a spy on a fresh MagicMock so we can verify the request body
         mock_api_client.session = MagicMock()
         mock_api_client.session.headers = {"Authorization": "Bearer old-access"}
         mock_api_client.session.cookies = MagicMock()
