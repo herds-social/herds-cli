@@ -639,3 +639,117 @@ class TestUploadDefaultBehavior:
         # Nothing from the polling code path should appear.
         assert "Image resized" not in out
         assert "Event extracted" not in out
+
+
+class TestUploadAuthFailure:
+    """End-to-end coverage for the auto-refresh + tailored-hint behaviour."""
+
+    def _create_session_with_refresh(self, sm, email="test@example.com", refresh_token="rfr"):
+        sm.save_session(email, {
+            "client_type": "mobile",
+            "tokens": {"access_token": "old", "refresh_token": refresh_token},
+            "user_data": {"id": "user-123", "email": email},
+        })
+
+    def _create_google_session_no_refresh(self, sm, email="g@example.com"):
+        sm.save_session(email, {
+            "client_type": "mobile",
+            "auth_provider": "google",
+            "tokens": {"access_token": "old"},  # no refresh_token
+            "user_data": {"id": "user-456", "email": email},
+        })
+
+    def test_upload_auto_refreshes_on_401_and_succeeds(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path, mock_api_client,
+    ):
+        """A stale access_token with a valid refresh_token uploads cleanly:
+        the user sees no auth error."""
+        self._create_session_with_refresh(mock_session_manager)
+        flyer = _create_image_file(tmp_path)
+
+        unauthorized = _make_response(status_code=401, json_data={"detail": "expired"})
+        refreshed = _make_response(json_data={
+            "access_token": "new", "refresh_token": "new-rfr", "expires_in": 3600,
+        })
+        ok = _make_response(json_data={"image_id": "img-001"})
+        mock_api_client.session.request.side_effect = [unauthorized, refreshed, ok]
+
+        result = cli_runner.invoke(
+            cli, ["image", "upload", str(flyer)], obj=cli_obj,
+        )
+
+        assert result.exit_code == 0, strip_ansi(result.output)
+        out = strip_ansi(result.output)
+        assert "Successfully uploaded" in out
+        assert "Session expired" not in out  # never surfaced
+
+    def test_upload_session_expired_password_account_shows_email_hint(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path, mock_api_client,
+    ):
+        """Stale access_token with no refresh_token → exit 1 with the tailored
+        password-account login hint."""
+        # Session has no refresh_token
+        mock_session_manager.save_session("test@example.com", {
+            "client_type": "mobile",
+            "tokens": {"access_token": "old"},
+            "user_data": {"id": "user-123", "email": "test@example.com"},
+        })
+        flyer = _create_image_file(tmp_path)
+
+        unauthorized = _make_response(status_code=401, json_data={"detail": "expired"})
+        mock_api_client.session.request.return_value = unauthorized
+
+        result = cli_runner.invoke(
+            cli, ["image", "upload", str(flyer)], obj=cli_obj,
+        )
+
+        assert result.exit_code == 1
+        out = strip_ansi(result.output)
+        assert "Session expired" in out
+        assert "herds user login --email test@example.com" in out
+
+    def test_upload_session_expired_google_account_shows_google_hint(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path, mock_api_client,
+    ):
+        """A google-OAuth session that fails to refresh shows `login-google`."""
+        self._create_google_session_no_refresh(mock_session_manager, email="g@example.com")
+        flyer = _create_image_file(tmp_path)
+
+        unauthorized = _make_response(status_code=401, json_data={"detail": "expired"})
+        mock_api_client.session.request.return_value = unauthorized
+
+        result = cli_runner.invoke(
+            cli, ["image", "upload", str(flyer), "--email", "g@example.com"],
+            obj=cli_obj,
+        )
+
+        assert result.exit_code == 1
+        out = strip_ansi(result.output)
+        assert "Session expired" in out
+        assert "herds user login-google" in out
+        # The password-flavored hint must NOT appear:
+        assert "login --email" not in out
+
+    def test_no_pre_action_prints_when_session_missing(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path,
+    ):
+        """When the session lookup fails, the CLI must not print 'Uploading…'
+        or 'Using timezone…' — those should appear only after auth is loaded."""
+        # Add a single session for an UNRELATED email so the email arg path is
+        # exercised without a matching session.
+        mock_session_manager.save_session("other@example.com", {
+            "client_type": "mobile",
+            "tokens": {"access_token": "x"},
+            "user_data": {"id": "u9", "email": "other@example.com"},
+        })
+        flyer = _create_image_file(tmp_path)
+
+        result = cli_runner.invoke(
+            cli, ["image", "upload", str(flyer), "--email", "ghost@example.com"],
+            obj=cli_obj,
+        )
+
+        assert result.exit_code != 0
+        out = strip_ansi(result.output)
+        assert "Uploading" not in out
+        assert "Using timezone" not in out
