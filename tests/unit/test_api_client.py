@@ -378,9 +378,9 @@ class TestMakeRequestRetry:
         with pytest.raises(SessionExpiredError):
             mock_api_client._make_request("GET", "http://localhost/api/x")
 
-        out = capsys.readouterr().out + capsys.readouterr().err
-        assert "herds user login --email alice@example.com" in out or \
-               "Session expired" in out
+        captured = capsys.readouterr()
+        out = captured.out + captured.err
+        assert "herds user login --email alice@example.com" in out
 
 
 class TestMakeRequest:
