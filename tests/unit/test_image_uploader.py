@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from herds_cli.core.exceptions import SessionExpiredError
 from herds_cli.images import ImageUploader
 
 
@@ -180,14 +181,19 @@ class TestUploadImage:
             uploader.upload_image(str(tmp_path / "flyer.jpg"), "nobody@example.com")
 
     def test_upload_http_error_raises(self, uploader, mock_session_manager, tmp_path):
+        """When the upload returns 401 and the session has no refresh_token,
+        _make_request raises SessionExpiredError with the tailored hint."""
         _create_image_file(tmp_path, "flyer.jpg")
         mock_resp = self._setup_auth_and_response(
             uploader, mock_session_manager, status=401,
         )
         mock_resp.json.return_value = {"detail": "Token expired"}
 
-        with pytest.raises(Exception, match="Upload failed.*401.*Token expired"):
+        with pytest.raises(SessionExpiredError) as exc_info:
             uploader.upload_image(str(tmp_path / "flyer.jpg"), "test@example.com")
+
+        assert exc_info.value.email == "test@example.com"
+        assert "herds user login --email test@example.com" in str(exc_info.value)
 
     def test_upload_http_error_no_json(self, uploader, mock_session_manager, tmp_path):
         _create_image_file(tmp_path, "flyer.jpg")

@@ -19,6 +19,7 @@ import time
 import json
 from typing import Any, Dict, List, Literal, NoReturn, Optional, overload
 
+from .output import OutputFormatter
 from .sessions import SessionManager
 from .types import (
     ChangePasswordResponse,
@@ -329,11 +330,27 @@ class APIClient:
         except:
             print("[DEBUG RESPONSE] Body: Unable to determine size")
 
-    def _make_request(self, method: str, url: str, **kwargs) -> requests.Response:
-        """Make an HTTP request with optional debug logging."""
+    def _make_request(
+        self,
+        method: str,
+        url: str,
+        _retried: bool = False,
+        **kwargs,
+    ) -> requests.Response:
+        """Make an HTTP request with optional debug logging.
+
+        On 401, attempts one refresh-and-retry against the session
+        recorded in self._current_session_email. If the refresh
+        succeeds, the original request is replayed once and that
+        response is returned. If the refresh fails, prints the
+        tailored "log in again" hint and raises SessionExpiredError.
+
+        The private _retried kwarg disables the retry — used by the
+        recursive replay call so a second 401 propagates to the
+        caller's handle_api_error untouched.
+        """
         self._log_request(method, url, **kwargs)
 
-        # Set timeout if not already specified in kwargs
         if "timeout" not in kwargs:
             kwargs["timeout"] = self.timeout
 
@@ -352,6 +369,35 @@ class APIClient:
             )
 
         self._log_response(response, start_time)
+
+        # Auto-refresh on 401 (one shot per outer call). Skipped when:
+        #   - we already retried (recursive call passes _retried=True)
+        #   - no session is loaded (e.g. during login itself)
+        if (
+            response.status_code == 401
+            and not _retried
+            and self._current_session_email is not None
+        ):
+            email = self._current_session_email
+            if self.refresh_session_auth(email):
+                # Replay the original request with refreshed credentials.
+                return self._make_request(
+                    method, url, _retried=True, **kwargs,
+                )
+
+            # Refresh failed — surface tailored hint and bail.
+            # Lazy import: top-level `from .core.exceptions import ...` would
+            # trigger core/__init__.py → base.py → api.APIClient, creating a
+            # circular import. This is the documented exception to the
+            # imports-at-top-of-file rule.
+            from .core.exceptions import SessionExpiredError
+
+            session_data = self.session_manager.load_session(email)
+            auth_provider = (session_data or {}).get("auth_provider")
+            exc = SessionExpiredError(email, auth_provider)
+            OutputFormatter.print_error(str(exc))
+            raise exc
+
         return response
 
     def login(
