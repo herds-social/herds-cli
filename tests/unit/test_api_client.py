@@ -125,6 +125,132 @@ class TestLoadSessionAuth:
         assert mock_api_client._current_session_email is None
 
 
+class TestRefreshSessionAuth:
+    def _save_mobile_session(self, sm, email="test@example.com", refresh="rfr-abc"):
+        sm.save_session(email, {
+            "client_type": "mobile",
+            "tokens": {"access_token": "old-access", "refresh_token": refresh, "expires_in": 3600},
+            "user_data": {"id": "u1", "email": email},
+        })
+
+    def _save_web_session(self, sm, email="test@example.com"):
+        sm.save_session(email, {
+            "client_type": "web",
+            "cookies": {"access_token": "old-cookie", "refresh_token": "rfr-cookie"},
+            "user_data": {"id": "u1", "email": email},
+        })
+
+    def test_mobile_success_persists_rotated_tokens(self, mock_api_client, mock_session_manager):
+        self._save_mobile_session(mock_session_manager)
+        mock_api_client.session = requests.Session()
+        mock_api_client.load_session_auth("test@example.com")
+
+        # Replace session.request with a mock that returns the new tokens
+        with_mock = MagicMock()
+        with_mock.session = MagicMock()
+        # Use a spy on a fresh MagicMock so we can verify the request body
+        mock_api_client.session = MagicMock()
+        mock_api_client.session.headers = {"Authorization": "Bearer old-access"}
+        mock_api_client.session.cookies = MagicMock()
+        refreshed = MagicMock(status_code=200)
+        refreshed.json.return_value = {
+            "access_token": "new-access",
+            "refresh_token": "new-refresh",
+            "expires_in": 3600,
+        }
+        mock_api_client.session.request.return_value = refreshed
+
+        result = mock_api_client.refresh_session_auth("test@example.com")
+
+        assert result is True
+        # Persisted to disk
+        on_disk = mock_session_manager.load_session("test@example.com")
+        assert on_disk["tokens"]["access_token"] == "new-access"
+        assert on_disk["tokens"]["refresh_token"] == "new-refresh"
+        # Applied in-memory
+        assert mock_api_client.session.headers["Authorization"] == "Bearer new-access"
+        # Hit the right endpoint with the right body
+        call = mock_api_client.session.request.call_args
+        assert call.args[0] == "POST"
+        assert call.args[1].endswith("/api/users/refresh-token")
+        assert call.kwargs["json"] == {
+            "refresh_token": "rfr-abc",
+            "client_type": "mobile",
+        }
+
+    def test_web_success_persists_rotated_cookies(self, mock_api_client, mock_session_manager):
+        self._save_web_session(mock_session_manager)
+        mock_api_client.session = MagicMock()
+        mock_api_client.session.headers = {}
+        mock_api_client.session.cookies = MagicMock()
+        refreshed = MagicMock(status_code=200)
+        refreshed.json.return_value = {
+            "access_token": "new-cookie-access",
+            "refresh_token": "new-cookie-refresh",
+            "expires_in": 3600,
+        }
+        mock_api_client.session.request.return_value = refreshed
+
+        result = mock_api_client.refresh_session_auth("test@example.com")
+
+        assert result is True
+        on_disk = mock_session_manager.load_session("test@example.com")
+        assert on_disk["cookies"]["access_token"] == "new-cookie-access"
+        assert on_disk["cookies"]["refresh_token"] == "new-cookie-refresh"
+        mock_api_client.session.cookies.set.assert_any_call("access_token", "new-cookie-access")
+        mock_api_client.session.cookies.set.assert_any_call("refresh_token", "new-cookie-refresh")
+
+    def test_no_session_returns_false(self, mock_api_client):
+        assert mock_api_client.refresh_session_auth("nobody@example.com") is False
+
+    def test_no_refresh_token_returns_false(self, mock_api_client, mock_session_manager):
+        mock_session_manager.save_session("test@example.com", {
+            "client_type": "mobile",
+            "tokens": {"access_token": "old"},  # no refresh_token
+            "user_data": {"id": "u1", "email": "test@example.com"},
+        })
+
+        result = mock_api_client.refresh_session_auth("test@example.com")
+        assert result is False
+        # Should never have called the server
+        mock_api_client.session.request.assert_not_called()
+
+    def test_server_401_returns_false_without_persisting(self, mock_api_client, mock_session_manager):
+        self._save_mobile_session(mock_session_manager)
+        denied = MagicMock(status_code=401)
+        denied.json.return_value = {"detail": "Invalid refresh token"}
+        mock_api_client.session.request.return_value = denied
+
+        result = mock_api_client.refresh_session_auth("test@example.com")
+
+        assert result is False
+        on_disk = mock_session_manager.load_session("test@example.com")
+        # Tokens unchanged
+        assert on_disk["tokens"]["access_token"] == "old-access"
+
+    def test_no_login_mode_returns_false(self, mock_session_manager):
+        client = APIClient(
+            base_url="http://localhost:8000",
+            session_manager=mock_session_manager,
+            no_login=True,
+        )
+        assert client.refresh_session_auth("any@example.com") is False
+
+    def test_missing_access_token_in_response_returns_false(self, mock_api_client, mock_session_manager):
+        self._save_mobile_session(mock_session_manager)
+        broken = MagicMock(status_code=200)
+        broken.json.return_value = {"refresh_token": "x"}  # missing access_token
+        mock_api_client.session.request.return_value = broken
+
+        assert mock_api_client.refresh_session_auth("test@example.com") is False
+
+    def test_network_error_returns_false(self, mock_api_client, mock_session_manager):
+        self._save_mobile_session(mock_session_manager)
+        mock_api_client.session.request.side_effect = requests.exceptions.ConnectionError("down")
+
+        assert mock_api_client.refresh_session_auth("test@example.com") is False
+
+
 class TestMakeRequest:
     def test_success_returns_response(self, mock_api_client):
         mock_response = MagicMock(status_code=200)

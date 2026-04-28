@@ -126,6 +126,91 @@ class APIClient:
             self._current_session_email = email
             return True
 
+    def refresh_session_auth(self, email: str) -> bool:
+        """Refresh the access token using the saved refresh token.
+
+        On success: persists rotated tokens to the session file via
+        SessionManager.save_session and mutates self.session in place
+        (Authorization header for mobile, cookies for web). Returns True.
+
+        Returns False on any of: no_login mode, no session on disk, no
+        refresh_token in the session, server returned non-200, response
+        body missing access_token, or network/timeout error.
+
+        Callers (specifically _make_request's 401-retry branch) use the
+        boolean return to decide between retrying the original request
+        and raising SessionExpiredError.
+        """
+        if self.no_login:
+            return False
+
+        session_data = self.session_manager.load_session(email)
+        if not session_data:
+            return False
+
+        client_type = session_data.get("client_type", "web")
+        if client_type == "mobile":
+            refresh_token = session_data.get("tokens", {}).get("refresh_token")
+        else:
+            refresh_token = session_data.get("cookies", {}).get("refresh_token")
+
+        if not refresh_token:
+            return False
+
+        url = f"{self.base_url}/api/users/refresh-token"
+        try:
+            response = self.session.request(
+                "POST",
+                url,
+                json={"refresh_token": refresh_token, "client_type": client_type},
+                timeout=self.timeout,
+            )
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+            return False
+
+        if response.status_code != 200:
+            return False
+
+        try:
+            body = response.json()
+        except ValueError:
+            return False
+
+        new_access = body.get("access_token")
+        if not new_access:
+            return False
+        new_refresh = body.get("refresh_token")
+        new_expires_in = body.get("expires_in")
+
+        # Persist rotated tokens to the session file. Mutate a copy so we
+        # don't leak partial state if save_session raises.
+        if client_type == "mobile":
+            tokens = dict(session_data.get("tokens", {}))
+            tokens["access_token"] = new_access
+            if new_refresh:
+                tokens["refresh_token"] = new_refresh
+            if new_expires_in is not None:
+                tokens["expires_in"] = new_expires_in
+            session_data["tokens"] = tokens
+        else:
+            cookies = dict(session_data.get("cookies", {}))
+            cookies["access_token"] = new_access
+            if new_refresh:
+                cookies["refresh_token"] = new_refresh
+            session_data["cookies"] = cookies
+
+        self.session_manager.save_session(email, session_data)
+
+        # Apply the new credentials to the live requests.Session in place.
+        if client_type == "mobile":
+            self.session.headers.update({"Authorization": f"Bearer {new_access}"})
+        else:
+            self.session.cookies.set("access_token", new_access)
+            if new_refresh:
+                self.session.cookies.set("refresh_token", new_refresh)
+
+        return True
+
     @overload
     def _sanitize_data(self, data: Dict[str, Any], skip_auth_redaction: bool = ...) -> Dict[str, Any]: ...
     @overload
