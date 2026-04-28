@@ -27,7 +27,8 @@
 - `tests/unit/test_image_uploader.py` — update `test_upload_http_error_raises` to reflect the new SessionExpiredError path; add a test that pre-action prints appear inside `upload_image`.
 - `tests/cli/test_cli_image.py` — add `TestUploadAuthFailure` covering tailored-hint output and the no-pre-action-chatter ordering.
 
-No new files.
+Prefer modifying existing files. If exception tests are not present in
+`tests/unit/test_helpers.py`, adding `tests/unit/test_exceptions.py` is allowed.
 
 ---
 
@@ -695,7 +696,8 @@ class TestMakeRequestRetry:
         with pytest.raises(SessionExpiredError):
             mock_api_client._make_request("GET", "http://localhost/api/x")
 
-        out = capsys.readouterr().out + capsys.readouterr().err
+        captured = capsys.readouterr()
+        out = captured.out + captured.err
         # Print happens via OutputFormatter.print_error which uses Rich
         # console; combining stdout+stderr makes the assertion robust.
         # We just check that the tailored command appears somewhere.
