@@ -19,6 +19,7 @@ import time
 import json
 from typing import Any, Dict, List, Literal, NoReturn, Optional, overload
 
+from .core.exceptions import SessionExpiredError
 from .output import OutputFormatter
 from .sessions import SessionManager
 from .types import (
@@ -386,12 +387,6 @@ class APIClient:
                 )
 
             # Refresh failed — surface tailored hint and bail.
-            # Lazy import: top-level `from .core.exceptions import ...` would
-            # trigger core/__init__.py → base.py → api.APIClient, creating a
-            # circular import. This is the documented exception to the
-            # imports-at-top-of-file rule.
-            from .core.exceptions import SessionExpiredError
-
             session_data = self.session_manager.load_session(email)
             auth_provider = (session_data or {}).get("auth_provider")
             exc = SessionExpiredError(email, auth_provider)
