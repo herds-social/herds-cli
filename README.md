@@ -27,7 +27,46 @@ Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
 git clone https://github.com/herds-social/herds-cli.git
 cd herds-cli
 uv sync
-uv run herds --help
+uv run herds --help   # run inside the repo only
+```
+
+#### Install globally for your user with `uv tool`
+
+To make `herds` available from any directory (not just the repo), install it as a uv tool:
+
+```bash
+# from the repo root
+uv tool install .
+
+# one-time: ensure ~/.local/bin is on your PATH
+uv tool update-shell
+```
+
+This creates an isolated environment for the CLI under `~/.local/share/uv/tools/herds-cli/` and drops a `herds` shim into `~/.local/bin/`. Verify with:
+
+```bash
+which herds
+herds --help
+```
+
+For active development, install in editable mode so source edits are picked up without reinstalling:
+
+```bash
+uv tool install --editable .
+```
+
+To upgrade or reinstall after pulling new changes:
+
+```bash
+uv tool upgrade herds-cli
+# or, to force a clean reinstall
+uv tool install --reinstall .
+```
+
+To remove it:
+
+```bash
+uv tool uninstall herds-cli
 ```
 
 ## Quick start
@@ -50,68 +89,68 @@ herds events list
 
 ### User management
 
-| Command | Description |
-|---|---|
-| `herds user login` | Authenticate with email/password |
-| `herds user login-google` | Authenticate via Google OAuth |
-| `herds user create-user` | Create a new account |
-| `herds user change-password` | Change your password |
-| `herds user whoami` | Show current user info |
-| `herds user sessions` | List all stored sessions |
-| `herds user logout` | Clear stored session |
+| Command                      | Description                      |
+| ---------------------------- | -------------------------------- |
+| `herds user login`           | Authenticate with email/password |
+| `herds user login-google`    | Authenticate via Google OAuth    |
+| `herds user create-user`     | Create a new account             |
+| `herds user change-password` | Change your password             |
+| `herds user whoami`          | Show current user info           |
+| `herds user sessions`        | List all stored sessions         |
+| `herds user logout`          | Clear stored session             |
 
 ### Images
 
-| Command | Description |
-|---|---|
-| `herds image upload <file>` | Upload an image for event extraction |
-| `herds image get <id>` | Get image metadata |
+| Command                       | Description                           |
+| ----------------------------- | ------------------------------------- |
+| `herds image upload <file>`   | Upload an image for event extraction  |
+| `herds image get <id>`        | Get image metadata                    |
 | `herds image detections <id>` | Get AI detection results for an image |
-| `herds image in-progress` | List images currently processing |
-| `herds image delete <id>` | Delete an image |
+| `herds image in-progress`     | List images currently processing      |
+| `herds image delete <id>`     | Delete an image                       |
 
 ### Events
 
-| Command | Description |
-|---|---|
-| `herds events list` | List your events (supports date filters and sorting) |
-| `herds events get <id>` | Get event details |
-| `herds events update <id>` | Update event fields (title, date, location, etc.) |
-| `herds events delete <id>` | Delete an event |
-| `herds events by-image <image-id>` | Get events extracted from a specific image |
+| Command                            | Description                                          |
+| ---------------------------------- | ---------------------------------------------------- |
+| `herds events list`                | List your events (supports date filters and sorting) |
+| `herds events get <id>`            | Get event details                                    |
+| `herds events update <id>`         | Update event fields (title, date, location, etc.)    |
+| `herds events delete <id>`         | Delete an event                                      |
+| `herds events by-image <image-id>` | Get events extracted from a specific image           |
 
 ### Event user data
 
-| Command | Description |
-|---|---|
-| `herds event-user-data get <event-id>` | Get your data for an event |
-| `herds event-user-data update` | Set calendar integration IDs |
+| Command                                       | Description                       |
+| --------------------------------------------- | --------------------------------- |
+| `herds event-user-data get <event-id>`        | Get your data for an event        |
+| `herds event-user-data update`                | Set calendar integration IDs      |
 | `herds event-user-data delete-all <event-id>` | Remove all your data for an event |
 
 ### User settings
 
-| Command | Description |
-|---|---|
-| `herds user-settings get` | Show your preferences |
+| Command                      | Description                                      |
+| ---------------------------- | ------------------------------------------------ |
+| `herds user-settings get`    | Show your preferences                            |
 | `herds user-settings update` | Update preferences (calendar, sort, theme, etc.) |
 
 ### Calendar
 
-| Command | Description |
-|---|---|
-| `herds calendar connect` | Start OAuth flow for Google/Outlook |
-| `herds calendar status` | Check connection status |
-| `herds calendar calendars` | List connected calendars |
+| Command                    | Description                         |
+| -------------------------- | ----------------------------------- |
+| `herds calendar connect`   | Start OAuth flow for Google/Outlook |
+| `herds calendar status`    | Check connection status             |
+| `herds calendar calendars` | List connected calendars            |
 
 ### Configuration
 
-| Command | Description |
-|---|---|
-| `herds config show` | Display current config |
-| `herds config validate` | Validate config |
-| `herds config set` | Set config values (interactive or programmatic) |
-| `herds config save <file>` | Save config to a JSON file |
-| `herds config reset` | Show defaults |
+| Command                    | Description                                     |
+| -------------------------- | ----------------------------------------------- |
+| `herds config show`        | Display current config                          |
+| `herds config validate`    | Validate config                                 |
+| `herds config set`         | Set config values (interactive or programmatic) |
+| `herds config save <file>` | Save config to a JSON file                      |
+| `herds config reset`       | Show defaults                                   |
 
 ## Global options
 
@@ -162,10 +201,10 @@ Sessions are stored as JSON files in `~/.herds/` with one file per account:
 
 The CLI supports two auth modes:
 
-| Mode | Flag | Auth mechanism |
-|---|---|---|
-| Web (default) | `--client-type web` | HTTP cookies |
-| Mobile | `--client-type mobile` | Bearer token |
+| Mode          | Flag                   | Auth mechanism |
+| ------------- | ---------------------- | -------------- |
+| Web (default) | `--client-type web`    | HTTP cookies   |
+| Mobile        | `--client-type mobile` | Bearer token   |
 
 ## Examples
 
@@ -204,13 +243,13 @@ herds --verbose --debug-requests image upload flyer.jpg
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---|---|
-| "No active sessions found" | Run `herds user login` first |
-| "Multiple sessions found" | Add `--account you@example.com` to pick one |
-| API connection errors | Check `herds config show` for the API URL; ensure the server is running |
-| Permission errors on session files | Check directory permissions on `~/.herds/` |
-| Command not found | Verify installation: `which herds` or `pipx list` |
+| Problem                            | Fix                                                                     |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| "No active sessions found"         | Run `herds user login` first                                            |
+| "Multiple sessions found"          | Add `--account you@example.com` to pick one                             |
+| API connection errors              | Check `herds config show` for the API URL; ensure the server is running |
+| Permission errors on session files | Check directory permissions on `~/.herds/`                              |
+| Command not found                  | Verify installation: `which herds` or `pipx list`                       |
 
 Use `herds config validate` to check your configuration is complete.
 
