@@ -19,6 +19,8 @@ import time
 import json
 from typing import Any, Dict, List, Literal, NoReturn, Optional, overload
 
+from .core.exceptions import SessionExpiredError
+from .output import OutputFormatter
 from .sessions import SessionManager
 from .types import (
     ChangePasswordResponse,
@@ -69,6 +71,8 @@ class APIClient:
         self.timeout = timeout
         self.app_api_key = app_api_key
         self.session = requests.Session()
+        # Set by load_session_auth; consumed by _make_request for refresh-on-401.
+        self._current_session_email: Optional[str] = None
 
     def load_session_auth(self, email: str) -> bool:
         """Load session authentication for the given account.
@@ -79,8 +83,12 @@ class APIClient:
 
         Clears any previous auth state first so that switching between
         accounts or client types never leaves stale credentials.
+
+        Also records the email in self._current_session_email so that
+        _make_request can attempt a refresh-on-401 against the right
+        session. no_login mode and a missing session both leave the
+        field as None.
         """
-        # If no_login is enabled, skip authentication entirely
         if self.no_login:
             return True
 
@@ -90,6 +98,10 @@ class APIClient:
         for cookie_name in ("access_token", "refresh_token"):
             self.session.cookies.pop(cookie_name, None)
 
+        # Also reset the tracked email so a subsequent failure doesn't
+        # leave a stale value out of sync with the cleared credentials.
+        self._current_session_email = None
+
         session_data = self.session_manager.load_session(email)
         if not session_data:
             return False
@@ -97,15 +109,14 @@ class APIClient:
         client_type = session_data.get("client_type", "web")
 
         if client_type == "mobile":
-            # Mobile client - use Authorization header only
             tokens = session_data.get("tokens", {})
             access_token = tokens.get("access_token")
             if access_token:
                 self.session.headers.update({"Authorization": f"Bearer {access_token}"})
+                self._current_session_email = email
                 return True
             return False
         else:
-            # Web client - use cookies only (backwards compatible)
             cookies = session_data.get("cookies", {})
             if not cookies:
                 return False
@@ -114,7 +125,99 @@ class APIClient:
                 self.session.cookies.set("access_token", cookies["access_token"])
             if "refresh_token" in cookies:
                 self.session.cookies.set("refresh_token", cookies["refresh_token"])
+            self._current_session_email = email
             return True
+
+    def refresh_session_auth(self, email: str) -> bool:
+        """Refresh the access token using the saved refresh token.
+
+        On success: persists rotated tokens to the session file via
+        SessionManager.save_session and mutates self.session in place
+        (Authorization header for mobile, cookies for web). Returns True.
+
+        Returns False on any of: no_login mode, no session on disk, no
+        refresh_token in the session, server returned non-200, response
+        body missing access_token, or network/timeout error.
+
+        Callers (specifically _make_request's 401-retry branch) use the
+        boolean return to decide between retrying the original request
+        and raising SessionExpiredError.
+        """
+        if self.no_login:
+            return False
+
+        session_data = self.session_manager.load_session(email)
+        if not session_data:
+            return False
+
+        client_type = session_data.get("client_type", "web")
+        if client_type == "mobile":
+            refresh_token = session_data.get("tokens", {}).get("refresh_token")
+        else:
+            refresh_token = session_data.get("cookies", {}).get("refresh_token")
+
+        if not refresh_token:
+            return False
+
+        url = f"{self.base_url}/api/users/refresh-token"
+        # Log via the same helpers as _make_request so --debug-requests sees
+        # the refresh round-trip. We call session.request directly (not
+        # self._make_request) to avoid the 401-retry loop calling us back
+        # recursively when Task 4's auto-refresh wiring lands.
+        request_kwargs = {
+            "json": {"refresh_token": refresh_token, "client_type": client_type},
+            "timeout": self.timeout,
+        }
+        self._log_request("POST", url, **request_kwargs)
+        start_time = time.time()
+        try:
+            response = self.session.request("POST", url, **request_kwargs)
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+            return False
+        self._log_response(response, start_time)
+
+        if response.status_code != 200:
+            return False
+
+        try:
+            body = response.json()
+        except ValueError:
+            return False
+
+        new_access = body.get("access_token")
+        if not new_access:
+            return False
+        new_refresh = body.get("refresh_token")
+        new_expires_in = body.get("expires_in")
+
+        # Persist rotated tokens to the session file. session_data is a
+        # fresh deserialization from disk owned by this function, so we
+        # mutate it in place — if save_session raises, the local goes out
+        # of scope and nothing else observes the partial state.
+        if client_type == "mobile":
+            tokens = session_data.setdefault("tokens", {})
+            tokens["access_token"] = new_access
+            if new_refresh:
+                tokens["refresh_token"] = new_refresh
+            if new_expires_in is not None:
+                tokens["expires_in"] = new_expires_in
+        else:
+            cookies = session_data.setdefault("cookies", {})
+            cookies["access_token"] = new_access
+            if new_refresh:
+                cookies["refresh_token"] = new_refresh
+
+        self.session_manager.save_session(email, session_data)
+
+        # Apply the new credentials to the live requests.Session in place.
+        if client_type == "mobile":
+            self.session.headers.update({"Authorization": f"Bearer {new_access}"})
+        else:
+            self.session.cookies.set("access_token", new_access)
+            if new_refresh:
+                self.session.cookies.set("refresh_token", new_refresh)
+
+        return True
 
     @overload
     def _sanitize_data(self, data: Dict[str, Any], skip_auth_redaction: bool = ...) -> Dict[str, Any]: ...
@@ -228,11 +331,27 @@ class APIClient:
         except:
             print("[DEBUG RESPONSE] Body: Unable to determine size")
 
-    def _make_request(self, method: str, url: str, **kwargs) -> requests.Response:
-        """Make an HTTP request with optional debug logging."""
+    def _make_request(
+        self,
+        method: str,
+        url: str,
+        _retried: bool = False,
+        **kwargs,
+    ) -> requests.Response:
+        """Make an HTTP request with optional debug logging.
+
+        On 401, attempts one refresh-and-retry against the session
+        recorded in self._current_session_email. If the refresh
+        succeeds, the original request is replayed once and that
+        response is returned. If the refresh fails, prints the
+        tailored "log in again" hint and raises SessionExpiredError.
+
+        The private _retried kwarg disables the retry — used by the
+        recursive replay call so a second 401 propagates to the
+        caller's handle_api_error untouched.
+        """
         self._log_request(method, url, **kwargs)
 
-        # Set timeout if not already specified in kwargs
         if "timeout" not in kwargs:
             kwargs["timeout"] = self.timeout
 
@@ -251,6 +370,29 @@ class APIClient:
             )
 
         self._log_response(response, start_time)
+
+        # Auto-refresh on 401 (one shot per outer call). Skipped when:
+        #   - we already retried (recursive call passes _retried=True)
+        #   - no session is loaded (e.g. during login itself)
+        if (
+            response.status_code == 401
+            and not _retried
+            and self._current_session_email is not None
+        ):
+            email = self._current_session_email
+            if self.refresh_session_auth(email):
+                # Replay the original request with refreshed credentials.
+                return self._make_request(
+                    method, url, _retried=True, **kwargs,
+                )
+
+            # Refresh failed — surface tailored hint and bail.
+            session_data = self.session_manager.load_session(email)
+            auth_provider = (session_data or {}).get("auth_provider")
+            exc = SessionExpiredError(email, auth_provider)
+            OutputFormatter.print_error(str(exc))
+            raise exc
+
         return response
 
     def login(

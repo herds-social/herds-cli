@@ -5,6 +5,8 @@ These replace sys.exit(1) calls in helper functions, keeping process lifecycle
 decisions at the CLI command boundary where they belong.
 """
 
+from typing import Optional
+
 
 class HerdsError(Exception):
     """Base exception for all Herds CLI domain errors.
@@ -71,3 +73,24 @@ class APIRequestError(HerdsError):
     def __init__(self, message, status_code=None):
         self.status_code = status_code
         super().__init__(message)
+
+
+class SessionExpiredError(HerdsError):
+    """Refresh-and-retry failed; user must re-authenticate.
+
+    Raised by APIClient._make_request when a 401 response is followed by a
+    failed refresh attempt (no refresh_token saved, refresh-token endpoint
+    returned non-200, or network error during refresh).
+
+    The constructed message embeds the exact `herds user login` command
+    appropriate for the account's auth_provider.
+    """
+
+    def __init__(self, email: str, auth_provider: Optional[str] = None):
+        self.email = email
+        self.auth_provider = auth_provider
+        if auth_provider == "google":
+            cmd = "herds user login-google"
+        else:
+            cmd = f"herds user login --email {email}"
+        super().__init__(f"Session expired. Please log in again:\n  {cmd}")

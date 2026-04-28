@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from herds_cli.core.exceptions import SessionExpiredError
 from herds_cli.images import ImageUploader
 
 
@@ -180,14 +181,19 @@ class TestUploadImage:
             uploader.upload_image(str(tmp_path / "flyer.jpg"), "nobody@example.com")
 
     def test_upload_http_error_raises(self, uploader, mock_session_manager, tmp_path):
+        """When the upload returns 401 and the session has no refresh_token,
+        _make_request raises SessionExpiredError with the tailored hint."""
         _create_image_file(tmp_path, "flyer.jpg")
         mock_resp = self._setup_auth_and_response(
             uploader, mock_session_manager, status=401,
         )
         mock_resp.json.return_value = {"detail": "Token expired"}
 
-        with pytest.raises(Exception, match="Upload failed.*401.*Token expired"):
+        with pytest.raises(SessionExpiredError) as exc_info:
             uploader.upload_image(str(tmp_path / "flyer.jpg"), "test@example.com")
+
+        assert exc_info.value.email == "test@example.com"
+        assert "herds user login --email test@example.com" in str(exc_info.value)
 
     def test_upload_http_error_no_json(self, uploader, mock_session_manager, tmp_path):
         _create_image_file(tmp_path, "flyer.jpg")
@@ -203,6 +209,52 @@ class TestUploadImage:
     def test_upload_invalid_file_raises(self, uploader, tmp_path):
         with pytest.raises(ValueError, match="does not exist"):
             uploader.upload_image(str(tmp_path / "nope.jpg"), "test@example.com")
+
+    def test_pre_action_lines_printed_after_auth_load(
+        self, uploader, mock_session_manager, tmp_path, capsys
+    ):
+        """All info lines (Uploading, Using timezone, etc.) must be emitted
+        from upload_image — not the CLI command — and only after
+        load_session_auth has succeeded."""
+        _create_image_file(tmp_path, "flyer.jpg")
+        self._setup_auth_and_response(uploader, mock_session_manager)
+
+        uploader.upload_image(
+            str(tmp_path / "flyer.jpg"),
+            "test@example.com",
+            timezone="UTC",
+            alg_version="v3",
+            mock_mode=True,
+            add_to_calendar=True,
+        )
+
+        captured = capsys.readouterr()
+        out = captured.out + captured.err
+        assert "Uploading" in out
+        assert "Using timezone: UTC" in out
+        assert "Using algorithm version: v3" in out
+        assert "Using mock AI processing mode" in out
+        assert "Requesting auto-add to calendar" in out
+
+    def test_no_pre_action_prints_when_session_missing(
+        self, uploader, tmp_path, capsys
+    ):
+        """If load_session_auth fails, NOTHING about uploading should be
+        printed — the upload never happens. This is the regression we're
+        fixing."""
+        _create_image_file(tmp_path, "flyer.jpg")
+
+        with pytest.raises(Exception, match="No valid session"):
+            uploader.upload_image(
+                str(tmp_path / "flyer.jpg"),
+                "nobody@example.com",
+                timezone="UTC",
+            )
+
+        captured = capsys.readouterr()
+        out = captured.out + captured.err
+        assert "Uploading" not in out
+        assert "Using timezone" not in out
 
 
 class TestUploadMultipleImages:

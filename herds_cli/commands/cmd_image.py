@@ -101,16 +101,6 @@ def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode
     )
 
     try:
-        OutputFormatter.print_info(f"Uploading {file_path}...")
-        OutputFormatter.print_info(f"Using timezone: {timezone}")
-        if alg_version:
-            OutputFormatter.print_info(f"Using algorithm version: {alg_version}")
-        if mock:
-            OutputFormatter.print_info("Using mock AI processing mode")
-        if add_to_calendar is True:
-            OutputFormatter.print_info("Requesting auto-add to calendar")
-        elif add_to_calendar is False:
-            OutputFormatter.print_info("Skipping calendar auto-add (overrides user setting)")
         result = image_uploader.upload_image(
             file_path,
             email,

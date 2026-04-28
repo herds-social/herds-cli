@@ -10,6 +10,7 @@ import pytest
 import requests
 
 from herds_cli.api import APIClient
+from herds_cli.core.exceptions import SessionExpiredError
 
 
 class TestLoadSessionAuth:
@@ -76,6 +77,310 @@ class TestLoadSessionAuth:
         )
         result = client.load_session_auth("anyone@example.com")
         assert result is True
+
+    def test_sets_current_session_email_on_success(self, mock_api_client, mock_session_manager):
+        mock_session_manager.save_session("test@example.com", {
+            "client_type": "mobile",
+            "tokens": {"access_token": "tk"},
+            "user_data": {"id": "u1", "email": "test@example.com"},
+        })
+        mock_api_client.session = requests.Session()
+
+        mock_api_client.load_session_auth("test@example.com")
+
+        assert mock_api_client._current_session_email == "test@example.com"
+
+    def test_does_not_set_current_session_email_when_session_missing(self, mock_api_client):
+        mock_api_client.load_session_auth("nobody@example.com")
+        assert mock_api_client._current_session_email is None
+
+    def test_no_login_mode_does_not_set_current_session_email(self, mock_session_manager):
+        client = APIClient(
+            base_url="http://localhost:8000",
+            session_manager=mock_session_manager,
+            no_login=True,
+        )
+        client.load_session_auth("anyone@example.com")
+        assert client._current_session_email is None
+
+    def test_failed_load_after_successful_one_clears_email(
+        self, mock_api_client, mock_session_manager
+    ):
+        """load_session_auth(A) success then load_session_auth(B) where B has
+        no session must reset _current_session_email to None — otherwise the
+        field would be out of sync with the cleared credentials, and Task 4's
+        refresh-on-401 would silently target the wrong account."""
+        mock_session_manager.save_session("alice@example.com", {
+            "client_type": "mobile",
+            "tokens": {"access_token": "tk-alice"},
+            "user_data": {"id": "u1", "email": "alice@example.com"},
+        })
+        mock_api_client.session = requests.Session()
+
+        # First load: alice succeeds
+        assert mock_api_client.load_session_auth("alice@example.com") is True
+        assert mock_api_client._current_session_email == "alice@example.com"
+
+        # Second load: bob has no session → must reset, not leave alice
+        assert mock_api_client.load_session_auth("bob@example.com") is False
+        assert mock_api_client._current_session_email is None
+
+
+class TestRefreshSessionAuth:
+    def _save_mobile_session(self, sm, email="test@example.com", refresh="rfr-abc"):
+        sm.save_session(email, {
+            "client_type": "mobile",
+            "tokens": {"access_token": "old-access", "refresh_token": refresh, "expires_in": 3600},
+            "user_data": {"id": "u1", "email": email},
+        })
+
+    def _save_web_session(self, sm, email="test@example.com"):
+        sm.save_session(email, {
+            "client_type": "web",
+            "cookies": {"access_token": "old-cookie", "refresh_token": "rfr-cookie"},
+            "user_data": {"id": "u1", "email": email},
+        })
+
+    def test_mobile_success_persists_rotated_tokens(self, mock_api_client, mock_session_manager):
+        self._save_mobile_session(mock_session_manager)
+        mock_api_client.session = requests.Session()
+        mock_api_client.load_session_auth("test@example.com")
+
+        # Replace session.request with a mock that returns the new tokens
+        mock_api_client.session = MagicMock()
+        mock_api_client.session.headers = {"Authorization": "Bearer old-access"}
+        mock_api_client.session.cookies = MagicMock()
+        refreshed = MagicMock(status_code=200)
+        refreshed.json.return_value = {
+            "access_token": "new-access",
+            "refresh_token": "new-refresh",
+            "expires_in": 3600,
+        }
+        mock_api_client.session.request.return_value = refreshed
+
+        result = mock_api_client.refresh_session_auth("test@example.com")
+
+        assert result is True
+        # Persisted to disk
+        on_disk = mock_session_manager.load_session("test@example.com")
+        assert on_disk["tokens"]["access_token"] == "new-access"
+        assert on_disk["tokens"]["refresh_token"] == "new-refresh"
+        # Applied in-memory
+        assert mock_api_client.session.headers["Authorization"] == "Bearer new-access"
+        # Hit the right endpoint with the right body
+        call = mock_api_client.session.request.call_args
+        assert call.args[0] == "POST"
+        assert call.args[1].endswith("/api/users/refresh-token")
+        assert call.kwargs["json"] == {
+            "refresh_token": "rfr-abc",
+            "client_type": "mobile",
+        }
+
+    def test_web_success_persists_rotated_cookies(self, mock_api_client, mock_session_manager):
+        self._save_web_session(mock_session_manager)
+        mock_api_client.session = MagicMock()
+        mock_api_client.session.headers = {}
+        mock_api_client.session.cookies = MagicMock()
+        refreshed = MagicMock(status_code=200)
+        refreshed.json.return_value = {
+            "access_token": "new-cookie-access",
+            "refresh_token": "new-cookie-refresh",
+            "expires_in": 3600,
+        }
+        mock_api_client.session.request.return_value = refreshed
+
+        result = mock_api_client.refresh_session_auth("test@example.com")
+
+        assert result is True
+        on_disk = mock_session_manager.load_session("test@example.com")
+        assert on_disk["cookies"]["access_token"] == "new-cookie-access"
+        assert on_disk["cookies"]["refresh_token"] == "new-cookie-refresh"
+        mock_api_client.session.cookies.set.assert_any_call("access_token", "new-cookie-access")
+        mock_api_client.session.cookies.set.assert_any_call("refresh_token", "new-cookie-refresh")
+
+    def test_no_session_returns_false(self, mock_api_client):
+        assert mock_api_client.refresh_session_auth("nobody@example.com") is False
+
+    def test_no_refresh_token_returns_false(self, mock_api_client, mock_session_manager):
+        mock_session_manager.save_session("test@example.com", {
+            "client_type": "mobile",
+            "tokens": {"access_token": "old"},  # no refresh_token
+            "user_data": {"id": "u1", "email": "test@example.com"},
+        })
+
+        result = mock_api_client.refresh_session_auth("test@example.com")
+        assert result is False
+        # Should never have called the server
+        mock_api_client.session.request.assert_not_called()
+
+    def test_server_401_returns_false_without_persisting(self, mock_api_client, mock_session_manager):
+        self._save_mobile_session(mock_session_manager)
+        denied = MagicMock(status_code=401)
+        denied.json.return_value = {"detail": "Invalid refresh token"}
+        mock_api_client.session.request.return_value = denied
+
+        result = mock_api_client.refresh_session_auth("test@example.com")
+
+        assert result is False
+        on_disk = mock_session_manager.load_session("test@example.com")
+        # Tokens unchanged
+        assert on_disk["tokens"]["access_token"] == "old-access"
+
+    def test_no_login_mode_returns_false(self, mock_session_manager):
+        client = APIClient(
+            base_url="http://localhost:8000",
+            session_manager=mock_session_manager,
+            no_login=True,
+        )
+        assert client.refresh_session_auth("any@example.com") is False
+
+    def test_missing_access_token_in_response_returns_false(self, mock_api_client, mock_session_manager):
+        self._save_mobile_session(mock_session_manager)
+        broken = MagicMock(status_code=200)
+        broken.json.return_value = {"refresh_token": "x"}  # missing access_token
+        mock_api_client.session.request.return_value = broken
+
+        assert mock_api_client.refresh_session_auth("test@example.com") is False
+
+    def test_network_error_returns_false(self, mock_api_client, mock_session_manager):
+        self._save_mobile_session(mock_session_manager)
+        mock_api_client.session.request.side_effect = requests.exceptions.ConnectionError("down")
+
+        assert mock_api_client.refresh_session_auth("test@example.com") is False
+
+
+class TestMakeRequestRetry:
+    def _save_mobile_session(self, sm, email="test@example.com"):
+        sm.save_session(email, {
+            "client_type": "mobile",
+            "tokens": {"access_token": "old", "refresh_token": "rfr"},
+            "user_data": {"id": "u1", "email": email},
+        })
+
+    def test_401_then_refresh_then_retry_returns_200(self, mock_api_client, mock_session_manager):
+        self._save_mobile_session(mock_session_manager)
+        mock_api_client._current_session_email = "test@example.com"
+
+        unauthorized = MagicMock(status_code=401)
+        unauthorized.json.return_value = {"detail": "Invalid token"}
+        refreshed = MagicMock(status_code=200)
+        refreshed.json.return_value = {
+            "access_token": "new", "refresh_token": "new-rfr", "expires_in": 3600,
+        }
+        ok = MagicMock(status_code=200)
+        ok.json.return_value = {"data": "yay"}
+        mock_api_client.session.request.side_effect = [unauthorized, refreshed, ok]
+
+        result = mock_api_client._make_request("GET", "http://localhost/api/x")
+
+        assert result.status_code == 200
+        assert result.json() == {"data": "yay"}
+        assert mock_api_client.session.request.call_count == 3
+
+    def test_401_refresh_fails_raises_session_expired(self, mock_api_client, mock_session_manager):
+        mock_session_manager.save_session("test@example.com", {
+            "client_type": "mobile",
+            "tokens": {"access_token": "old"},  # no refresh_token
+            "user_data": {"id": "u1", "email": "test@example.com"},
+        })
+        mock_api_client._current_session_email = "test@example.com"
+
+        unauthorized = MagicMock(status_code=401)
+        unauthorized.json.return_value = {"detail": "Invalid token"}
+        mock_api_client.session.request.return_value = unauthorized
+
+        with pytest.raises(SessionExpiredError) as exc_info:
+            mock_api_client._make_request("GET", "http://localhost/api/x")
+
+        assert exc_info.value.email == "test@example.com"
+        assert exc_info.value.auth_provider is None
+
+    def test_401_google_session_uses_google_hint(self, mock_api_client, mock_session_manager):
+        mock_session_manager.save_session("g@example.com", {
+            "client_type": "mobile",
+            "auth_provider": "google",
+            "tokens": {"access_token": "old"},  # no refresh_token
+            "user_data": {"id": "u1", "email": "g@example.com"},
+        })
+        mock_api_client._current_session_email = "g@example.com"
+
+        unauthorized = MagicMock(status_code=401)
+        unauthorized.json.return_value = {"detail": "Invalid token"}
+        mock_api_client.session.request.return_value = unauthorized
+
+        with pytest.raises(SessionExpiredError) as exc_info:
+            mock_api_client._make_request("GET", "http://localhost/api/x")
+
+        assert exc_info.value.auth_provider == "google"
+        assert "herds user login-google" in str(exc_info.value)
+
+    def test_401_with_no_current_session_does_not_retry(self, mock_api_client):
+        # No session loaded → _current_session_email is None → bubble 401 unchanged
+        unauthorized = MagicMock(status_code=401)
+        unauthorized.json.return_value = {}
+        mock_api_client.session.request.return_value = unauthorized
+
+        result = mock_api_client._make_request("GET", "http://localhost/api/x")
+
+        assert result.status_code == 401
+        assert mock_api_client.session.request.call_count == 1
+
+    def test_retried_kwarg_disables_retry(self, mock_api_client, mock_session_manager):
+        self._save_mobile_session(mock_session_manager)
+        mock_api_client._current_session_email = "test@example.com"
+
+        unauthorized = MagicMock(status_code=401)
+        unauthorized.json.return_value = {}
+        mock_api_client.session.request.return_value = unauthorized
+
+        result = mock_api_client._make_request(
+            "GET", "http://localhost/api/x", _retried=True,
+        )
+
+        assert result.status_code == 401
+        assert mock_api_client.session.request.call_count == 1
+
+    def test_second_401_after_successful_refresh_does_not_loop(self, mock_api_client, mock_session_manager):
+        self._save_mobile_session(mock_session_manager)
+        mock_api_client._current_session_email = "test@example.com"
+
+        unauthorized_1 = MagicMock(status_code=401)
+        unauthorized_1.json.return_value = {}
+        refreshed = MagicMock(status_code=200)
+        refreshed.json.return_value = {
+            "access_token": "new", "refresh_token": "new-rfr", "expires_in": 3600,
+        }
+        unauthorized_2 = MagicMock(status_code=401)
+        unauthorized_2.json.return_value = {}
+        mock_api_client.session.request.side_effect = [
+            unauthorized_1, refreshed, unauthorized_2,
+        ]
+
+        result = mock_api_client._make_request("GET", "http://localhost/api/x")
+
+        assert result.status_code == 401
+        assert mock_api_client.session.request.call_count == 3
+
+    def test_prints_tailored_hint_before_raising(
+        self, mock_api_client, mock_session_manager, capsys
+    ):
+        mock_session_manager.save_session("alice@example.com", {
+            "client_type": "mobile",
+            "tokens": {"access_token": "old"},
+            "user_data": {"id": "u1", "email": "alice@example.com"},
+        })
+        mock_api_client._current_session_email = "alice@example.com"
+
+        unauthorized = MagicMock(status_code=401)
+        unauthorized.json.return_value = {}
+        mock_api_client.session.request.return_value = unauthorized
+
+        with pytest.raises(SessionExpiredError):
+            mock_api_client._make_request("GET", "http://localhost/api/x")
+
+        captured = capsys.readouterr()
+        out = captured.out + captured.err
+        assert "herds user login --email alice@example.com" in out
 
 
 class TestMakeRequest:

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, cast
 
 from .api import APIClient
+from .output import OutputFormatter
 from .sessions import SessionManager
 from .types import UploadResult
 
@@ -106,8 +107,12 @@ class ImageUploader:
         barcode: Optional[str] = None,
         add_to_calendar: Optional[bool] = None,
     ) -> Dict[str, Any]:
-        """
-        Upload an image file using authenticated session.
+        """Upload an image file using authenticated session.
+
+        Pre-action info lines (Uploading…, Using timezone…, etc.) are
+        emitted here — after load_session_auth confirms credentials are
+        loadable, before the multipart POST. This guarantees nothing is
+        printed when the upload won't actually happen.
 
         Args:
             file_path: Path to the image file
@@ -137,6 +142,21 @@ class ImageUploader:
             raise Exception(
                 f"No valid session found for {email}. Please login first using: "
                 "herds user login"
+            )
+
+        # Pre-action info — only after auth has been loaded successfully.
+        OutputFormatter.print_info(f"Uploading {file_path}...")
+        if timezone:
+            OutputFormatter.print_info(f"Using timezone: {timezone}")
+        if alg_version:
+            OutputFormatter.print_info(f"Using algorithm version: {alg_version}")
+        if mock_mode:
+            OutputFormatter.print_info("Using mock AI processing mode")
+        if add_to_calendar is True:
+            OutputFormatter.print_info("Requesting auto-add to calendar")
+        elif add_to_calendar is False:
+            OutputFormatter.print_info(
+                "Skipping calendar auto-add (overrides user setting)"
             )
 
         # Detect media type
