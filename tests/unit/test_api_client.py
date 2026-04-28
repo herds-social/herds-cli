@@ -102,6 +102,28 @@ class TestLoadSessionAuth:
         client.load_session_auth("anyone@example.com")
         assert client._current_session_email is None
 
+    def test_failed_load_after_successful_one_clears_email(
+        self, mock_api_client, mock_session_manager
+    ):
+        """load_session_auth(A) success then load_session_auth(B) where B has
+        no session must reset _current_session_email to None — otherwise the
+        field would be out of sync with the cleared credentials, and Task 4's
+        refresh-on-401 would silently target the wrong account."""
+        mock_session_manager.save_session("alice@example.com", {
+            "client_type": "mobile",
+            "tokens": {"access_token": "tk-alice"},
+            "user_data": {"id": "u1", "email": "alice@example.com"},
+        })
+        mock_api_client.session = requests.Session()
+
+        # First load: alice succeeds
+        assert mock_api_client.load_session_auth("alice@example.com") is True
+        assert mock_api_client._current_session_email == "alice@example.com"
+
+        # Second load: bob has no session → must reset, not leave alice
+        assert mock_api_client.load_session_auth("bob@example.com") is False
+        assert mock_api_client._current_session_email is None
+
 
 class TestMakeRequest:
     def test_success_returns_response(self, mock_api_client):

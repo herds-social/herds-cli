@@ -96,6 +96,10 @@ class APIClient:
         for cookie_name in ("access_token", "refresh_token"):
             self.session.cookies.pop(cookie_name, None)
 
+        # Also reset the tracked email so a subsequent failure doesn't
+        # leave a stale value out of sync with the cleared credentials.
+        self._current_session_email = None
+
         session_data = self.session_manager.load_session(email)
         if not session_data:
             return False
