@@ -398,16 +398,6 @@ def get_or_detect_session_email(
             else:
                 click.echo(f"  • {session['email']}")
 
-        if config and not config.default_account:
-            OutputFormatter.print_info("\nTo set a default account, use:")
-            OutputFormatter.print_info("  config save my-config.json")
-            OutputFormatter.print_info(
-                "  # Edit the file and set 'default_account' field"
-            )
-            OutputFormatter.print_info(
-                "  # Or use: export HERDS_DEFAULT_ACCOUNT=your@email.com"
-            )
-
         emails = [s["email"] for s in sessions]
         raise AmbiguousSessionError(emails)
 
