@@ -7,7 +7,7 @@ Implemented
 ## Context
 
 The Herds server (`PUT /api/user/setting`) silently drops premium-only fields
-(`theme`, `auto_add_to_calendar_enabled`) when a free-tier client PATCHes
+(`theme`, `auto_add_to_calendar_enabled`) when a free-tier client PUTs
 them, returning 200 OK with the unchanged stored values. The CLI's current
 `herds user-settings update` prints a green ✅ "Settings updated:" header
 and the saved values, giving the user no signal that part of their request
