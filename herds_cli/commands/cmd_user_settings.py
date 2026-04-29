@@ -284,9 +284,27 @@ def update_settings(
         "PUT", url, "Successfully updated user settings", json=data
     )
 
-    # Display updated settings
+    # Display updated settings — branch on ignored_fields to honor partial
+    # success. The server returns a non-empty ignored_fields when free-tier
+    # users PATCH premium-only fields (the silent-drop behavior). Older
+    # servers omit the field entirely, which we treat as an empty list.
     updated_settings = result.get("settings", {})
-    OutputFormatter.print_success("Settings updated:")
+    ignored_fields = result.get("ignored_fields", [])
+
+    if ignored_fields:
+        count = len(ignored_fields)
+        plural = "field" if count == 1 else "fields"
+        OutputFormatter.print_warning(
+            f"Settings partially updated — {count} {plural} ignored:"
+        )
+        for entry in ignored_fields:
+            field_name = entry.get("field", "<unknown>")
+            reason = _format_ignored_field_reason(entry.get("reason", ""))
+            OutputFormatter.print_info(f"  • {field_name} — {reason}")
+        OutputFormatter.print_info("Saved values:")
+    else:
+        OutputFormatter.print_success("Settings updated:")
+
     OutputFormatter.print_info(
         f"  Default Calendar: {updated_settings.get('default_calendar', 'Not set')}"
     )
@@ -304,5 +322,5 @@ def update_settings(
     date_filter = date_filter_val if isinstance(date_filter_val, str) else None
     OutputFormatter.print_info(f"  Date Filter: {_format_date_filter(date_filter)}")
 
-    # Output formatted response
+    # Output formatted response (JSON path includes ignored_fields verbatim)
     APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
