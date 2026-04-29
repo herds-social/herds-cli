@@ -29,6 +29,7 @@ from .commands import (
     config,
     user_settings,
     calendar,
+    ping,
 )
 
 
@@ -257,6 +258,7 @@ cli.add_command(event_user_data)
 cli.add_command(config)
 cli.add_command(user_settings)
 cli.add_command(calendar)
+cli.add_command(ping)
 
 if __name__ == "__main__":
     cli()

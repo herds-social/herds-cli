@@ -11,6 +11,7 @@ from .cmd_event_user_data import event_user_data
 from .cmd_config import config
 from .cmd_user_settings import user_settings
 from .cmd_calendar import calendar
+from .cmd_ping import ping
 
 __all__ = [
     "user",
@@ -20,4 +21,5 @@ __all__ = [
     "config",
     "user_settings",
     "calendar",
+    "ping",
 ]
