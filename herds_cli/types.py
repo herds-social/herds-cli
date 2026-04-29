@@ -347,3 +347,18 @@ class ImageV2Response(TypedDict, total=False):
     thumbnail_status: str
     original_size_mb: float
     extraction_exception: ExtractionException
+
+
+class PingResponse(TypedDict, total=False):
+    """Response from GET /ping.
+
+    Always returned with HTTP 200 — even when MongoDB is unreachable, so
+    operators can still see which deployment they're hitting. Identity
+    fields degrade to None rather than failing the request.
+    """
+
+    message: str
+    env: Optional[str]
+    supabase_ref: Optional[str]
+    mongo_db: Optional[str]
+    git_sha: Optional[str]

@@ -26,6 +26,7 @@ uv run pytest tests/cli/test_cli_image.py
 ```
 
 Tests live under `tests/`:
+
 - `tests/unit/` — unit tests for individual modules (api, config, images, helpers, types/oauth)
 - `tests/cli/` — Click CliRunner tests that invoke commands end-to-end with mocked HTTP
 
@@ -36,6 +37,7 @@ CLI tests inject a fully-built `ctx.obj` via `CliRunner.invoke(..., obj=cli_obj)
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full domain map: module descriptions, dependency flow, layer diagram, and key interfaces.
 
 **Quick orientation:**
+
 - Entry point: `herds_cli/cli.py` (Click root group, context setup)
 - Commands: `herds_cli/commands/cmd_*.py` (one file per command group)
 - Core: `core/base.py` (command base classes), `core/config.py` (Config), `core/exceptions.py` (HerdsError hierarchy)
@@ -59,6 +61,21 @@ When a bug appears to be caused by the server (wrong status code, missing fields
 - **[docs/exec-plans/active/](docs/exec-plans/active/)** — Current execution plans
 - **[docs/exec-plans/completed/](docs/exec-plans/completed/)** — Finished plans for reference
 - **[docs/references/](docs/references/)** — External docs (Google Auth setup, Homebrew distribution)
+
+## Versioning
+
+**Bump the version once per branch.** When a branch touches source under `herds_cli/`, increment the version one time on that branch — not on every commit during iterative development. Two files must stay in sync and move together in a single commit:
+
+- `pyproject.toml` (the `version = "..."` field, currently line 7)
+- `herds_cli/__init__.py` (the `__version__ = "..."` constant, currently line 8)
+
+Follow semver:
+
+- **Patch** (`1.0.0` → `1.0.1`) — bug fixes, internal refactors, no user-visible behavior change
+- **Minor** (`1.0.0` → `1.1.0`) — new commands, new flags, additive features
+- **Major** (`1.0.0` → `2.0.0`) — breaking CLI changes (removed/renamed flags or commands, changed output schema)
+
+Documentation-only and test-only branches do not require a bump.
 
 ## Release
 
