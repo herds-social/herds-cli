@@ -91,18 +91,13 @@ def parse_bool_value(ctx: click.Context, param: click.Parameter, value: str | bo
     )
 
 
-# Sentinel to distinguish "user did not pass the flag" from "user passed
-# nothing". Click delivers None for both an absent option and an option
-# whose value is genuinely None, so we need a distinct sentinel to tell
-# the two apart — otherwise we'd send a spurious null update to the API.
-_NOT_PROVIDED = object()
 
 RELATIVE_PATTERN = re.compile(
     r"^past[- ](\d+)[- ](days?|weeks?|months?)$", re.IGNORECASE
 )
 
 
-def parse_date_filter(ctx: click.Context, param: click.Parameter, value: str | None) -> str | object | None:
+def parse_date_filter(ctx: click.Context, param: click.Parameter, value: str | None) -> str | None:
     """Parse date filter from CLI shorthand into DSL string.
 
     Supported formats (all produce DSL strings):
@@ -113,9 +108,12 @@ def parse_date_filter(ctx: click.Context, param: click.Parameter, value: str | N
         past-7-days          → "past-7-days"
         2025-12-01..         → "2025-12-01.."
         2025-12-01..2026-01-31 → "2025-12-01..2026-01-31"
+
+    Returns None when the flag was not provided. Otherwise returns the
+    normalized DSL string (or raises BadParameter for unrecognized syntax).
     """
-    if value is None or value is _NOT_PROVIDED:
-        return _NOT_PROVIDED
+    if value is None:
+        return None
 
     v = value.strip()
 
@@ -200,7 +198,7 @@ def _format_date_filter(date_filter: str | None) -> str:
 @click.option(
     "--date-filter",
     callback=parse_date_filter,
-    default=_NOT_PROVIDED,
+    default=None,
     help="Default date filter for event listing. "
     "Presets: 'all', 'upcoming'. "
     "Relative: 'past-3-months', 'past-2-weeks', 'past-7-days'. "
@@ -216,7 +214,7 @@ def update_settings(
     filter_by: Optional[str],
     theme: Optional[str],
     auto_add_to_calendar: Optional[bool],
-    date_filter: str | object,
+    date_filter: str | None,
 ) -> None:
     """Update user settings and preferences.
 
@@ -242,7 +240,7 @@ def update_settings(
     cmd.load_session_auth(email)
 
     # Validate at least one field is being updated
-    date_filter_provided = date_filter is not _NOT_PROVIDED
+    date_filter_provided = date_filter is not None
     if not any(
         [
             default_calendar,
