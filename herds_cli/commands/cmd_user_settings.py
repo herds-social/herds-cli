@@ -91,7 +91,6 @@ def parse_bool_value(ctx: click.Context, param: click.Parameter, value: str | bo
     )
 
 
-
 RELATIVE_PATTERN = re.compile(
     r"^past[- ](\d+)[- ](days?|weeks?|months?)$", re.IGNORECASE
 )
