@@ -100,6 +100,22 @@ class TestPing:
         assert "—" in strip_ansi(result.output)
         assert "production" in strip_ansi(result.output)
 
+    def test_invalid_json_body_emits_friendly_error(self, cli_runner, cli_obj):
+        """A 200 response with a non-JSON body produces a CLI-friendly error,
+        not a raw JSONDecodeError traceback. Defends the JSON-parse guard.
+        """
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.side_effect = ValueError("Expecting value")
+        mock_response.text = "<html>upstream proxy error page</html>"
+        mock_response.headers = {"content-type": "text/html"}
+        mock_response.content = b"<html>upstream proxy error page</html>"
+        cli_obj["api_client"].session.request.return_value = mock_response
+
+        result = cli_runner.invoke(cli, ["ping"], obj=cli_obj)
+
+        assert result.exit_code != 0
+        assert "Failed to parse ping response as JSON" in strip_ansi(result.output)
+
     def test_http_non_200_raises_api_error(self, cli_runner, cli_obj):
         """If the server returns a non-200 (network blip, 502, etc.), ping fails fast."""
         mock_response = MagicMock(status_code=502)

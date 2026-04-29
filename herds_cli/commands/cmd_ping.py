@@ -13,6 +13,7 @@ import click
 
 from herds_cli.core.base import APIResponseHandler, CommandBase
 from herds_cli.core.exceptions import APIRequestError
+from herds_cli.output import OutputFormatter
 from herds_cli.types import PingResponse
 
 
@@ -31,7 +32,14 @@ def ping(ctx: click.Context) -> None:
             status_code=response.status_code,
         )
 
-    data: PingResponse = response.json()
+    try:
+        data: PingResponse = response.json()
+    except Exception as exc:
+        OutputFormatter.print_error("Failed to parse ping response as JSON.")
+        raise APIRequestError(
+            "Ping failed: invalid JSON response",
+            status_code=response.status_code,
+        ) from exc
     _render(data, cmd.output_format)
 
     exit_code = _evaluate_ping(data)
