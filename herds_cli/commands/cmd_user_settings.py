@@ -14,6 +14,25 @@ from herds_cli.output import OutputFormatter
 from herds_cli.core.base import CommandBase, APIResponseHandler
 
 
+# Maps server-side IgnoredField.reason enum values to human-readable
+# explanations rendered in the partial-success warning. Unknown reasons fall
+# through to their raw string via _format_ignored_field_reason — that is the
+# forward-compatibility hinge for new server enum values.
+_IGNORED_FIELD_REASON_MESSAGES: dict[str, str] = {
+    "requires_paid_subscription": "requires a paid subscription",
+}
+
+
+def _format_ignored_field_reason(reason: str) -> str:
+    """Map an IgnoredField.reason enum value to a human-readable explanation.
+
+    Unknown reasons fall through to the raw string so a server-side enum
+    addition (e.g., a future quota_exceeded) doesn't silently swallow the
+    explanation in older CLI builds — the user still sees *something*.
+    """
+    return _IGNORED_FIELD_REASON_MESSAGES.get(reason, reason)
+
+
 @click.group()
 def user_settings() -> None:
     """User settings management commands (get, update, etc.)"""
