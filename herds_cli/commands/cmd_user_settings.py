@@ -14,6 +14,25 @@ from herds_cli.output import OutputFormatter
 from herds_cli.core.base import CommandBase, APIResponseHandler
 
 
+# Maps server-side IgnoredField.reason enum values to human-readable
+# explanations rendered in the partial-success warning. Unknown reasons fall
+# through to their raw string via _format_ignored_field_reason — that is the
+# forward-compatibility hinge for new server enum values.
+_IGNORED_FIELD_REASON_MESSAGES: dict[str, str] = {
+    "requires_paid_subscription": "requires a paid subscription",
+}
+
+
+def _format_ignored_field_reason(reason: str) -> str:
+    """Map an IgnoredField.reason enum value to a human-readable explanation.
+
+    Unknown reasons fall through to the raw string so a server-side enum
+    addition (e.g., a future quota_exceeded) doesn't silently swallow the
+    explanation in older CLI builds — the user still sees *something*.
+    """
+    return _IGNORED_FIELD_REASON_MESSAGES.get(reason, reason)
+
+
 @click.group()
 def user_settings() -> None:
     """User settings management commands (get, update, etc.)"""
@@ -72,18 +91,12 @@ def parse_bool_value(ctx: click.Context, param: click.Parameter, value: str | bo
     )
 
 
-# Sentinel to distinguish "user did not pass the flag" from "user passed
-# nothing". Click delivers None for both an absent option and an option
-# whose value is genuinely None, so we need a distinct sentinel to tell
-# the two apart — otherwise we'd send a spurious null update to the API.
-_NOT_PROVIDED = object()
-
 RELATIVE_PATTERN = re.compile(
     r"^past[- ](\d+)[- ](days?|weeks?|months?)$", re.IGNORECASE
 )
 
 
-def parse_date_filter(ctx: click.Context, param: click.Parameter, value: str | None) -> str | object | None:
+def parse_date_filter(ctx: click.Context, param: click.Parameter, value: str | None) -> str | None:
     """Parse date filter from CLI shorthand into DSL string.
 
     Supported formats (all produce DSL strings):
@@ -94,9 +107,12 @@ def parse_date_filter(ctx: click.Context, param: click.Parameter, value: str | N
         past-7-days          → "past-7-days"
         2025-12-01..         → "2025-12-01.."
         2025-12-01..2026-01-31 → "2025-12-01..2026-01-31"
+
+    Returns None when the flag was not provided. Otherwise returns the
+    normalized DSL string (or raises BadParameter for unrecognized syntax).
     """
-    if value is None or value is _NOT_PROVIDED:
-        return _NOT_PROVIDED
+    if value is None:
+        return None
 
     v = value.strip()
 
@@ -181,7 +197,7 @@ def _format_date_filter(date_filter: str | None) -> str:
 @click.option(
     "--date-filter",
     callback=parse_date_filter,
-    default=_NOT_PROVIDED,
+    default=None,
     help="Default date filter for event listing. "
     "Presets: 'all', 'upcoming'. "
     "Relative: 'past-3-months', 'past-2-weeks', 'past-7-days'. "
@@ -197,7 +213,7 @@ def update_settings(
     filter_by: Optional[str],
     theme: Optional[str],
     auto_add_to_calendar: Optional[bool],
-    date_filter: str | object,
+    date_filter: str | None,
 ) -> None:
     """Update user settings and preferences.
 
@@ -223,7 +239,7 @@ def update_settings(
     cmd.load_session_auth(email)
 
     # Validate at least one field is being updated
-    date_filter_provided = date_filter is not _NOT_PROVIDED
+    date_filter_provided = date_filter is not None
     if not any(
         [
             default_calendar,
@@ -267,9 +283,27 @@ def update_settings(
         "PUT", url, "Successfully updated user settings", json=data
     )
 
-    # Display updated settings
+    # Display updated settings — branch on ignored_fields to honor partial
+    # success. The server returns a non-empty ignored_fields when free-tier
+    # users PATCH premium-only fields (the silent-drop behavior). Older
+    # servers omit the field entirely, which we treat as an empty list.
     updated_settings = result.get("settings", {})
-    OutputFormatter.print_success("Settings updated:")
+    ignored_fields = result.get("ignored_fields", [])
+
+    if ignored_fields:
+        count = len(ignored_fields)
+        plural = "field" if count == 1 else "fields"
+        OutputFormatter.print_warning(
+            f"Settings partially updated — {count} {plural} ignored:"
+        )
+        for entry in ignored_fields:
+            field_name = entry.get("field", "<unknown>")
+            reason = _format_ignored_field_reason(entry.get("reason", ""))
+            OutputFormatter.print_info(f"  • {field_name} — {reason}")
+        OutputFormatter.print_info("Saved values:")
+    else:
+        OutputFormatter.print_success("Settings updated:")
+
     OutputFormatter.print_info(
         f"  Default Calendar: {updated_settings.get('default_calendar', 'Not set')}"
     )
@@ -287,5 +321,5 @@ def update_settings(
     date_filter = date_filter_val if isinstance(date_filter_val, str) else None
     OutputFormatter.print_info(f"  Date Filter: {_format_date_filter(date_filter)}")
 
-    # Output formatted response
+    # Output formatted response (JSON path includes ignored_fields verbatim)
     APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)

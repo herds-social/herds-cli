@@ -207,6 +207,43 @@ class UserSettings(TypedDict, total=False):
     filter_by: Optional[str]
 
 
+IgnoredFieldReason = Literal["requires_paid_subscription"]
+"""Reason codes the server returns in UserSettingsUpdateResponse.ignored_fields.
+
+Today the only reason is requires_paid_subscription; the literal grows in
+lockstep with the server's IgnoredFieldReasonEnum. The runtime mapping in
+cmd_user_settings._format_ignored_field_reason falls back to the raw string
+for unknown reasons so older CLIs keep working when the server adds new ones.
+"""
+
+
+class IgnoredField(TypedDict):
+    """One entry in UserSettingsUpdateResponse.ignored_fields.
+
+    Mirrors the server's app.schemas.user_settings_schemas.IgnoredField.
+    """
+
+    field: str
+    reason: IgnoredFieldReason
+
+
+class UserSettingsUpdateResponse(TypedDict, total=False):
+    """Response from PUT /api/user/setting.
+
+    The settings dict is left loose because the existing command code accesses
+    it via .get() on a handful of fields — tightening it isn't part of this
+    change. ignored_fields lists fields the request set but the server did
+    not apply (e.g., free-tier user PATCHing premium-only fields). Empty list
+    or absent field means every requested change was applied.
+    """
+
+    user_id: str
+    settings: dict
+    ignored_fields: List[IgnoredField]
+    created_at: str
+    updated_at: str
+
+
 class UserInfo(TypedDict, total=False):
     """Detailed user profile from GET /api/users/me."""
 

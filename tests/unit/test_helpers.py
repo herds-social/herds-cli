@@ -13,6 +13,7 @@ import pytest
 from herds_cli.commands.cmd_events import _build_event_update_data
 from herds_cli.commands.cmd_config import _resolve_api_url_shortcut
 from herds_cli.commands.cmd_user import _load_google_oauth_credentials
+from herds_cli.commands.cmd_user_settings import _format_ignored_field_reason
 from herds_cli.core.base import APIResponseHandler
 from herds_cli.core.config import Config
 
@@ -393,3 +394,25 @@ class TestFormatErrorMessage:
             "HTTP 502: Access denied by Google. Ensure the Calendar API is enabled. "
             "[calendar_provider_error]"
         )
+
+
+# ---------------------------------------------------------------------------
+# _format_ignored_field_reason
+# ---------------------------------------------------------------------------
+
+
+class TestFormatIgnoredFieldReason:
+    def test_known_reason_returns_human_string(self):
+        assert (
+            _format_ignored_field_reason("requires_paid_subscription")
+            == "requires a paid subscription"
+        )
+
+    def test_unknown_reason_falls_back_to_raw_string(self):
+        # Forward-compatibility: a future server reason like quota_exceeded
+        # should print as-is rather than disappear, so the user still gets
+        # *some* explanation even on an outdated CLI.
+        assert _format_ignored_field_reason("quota_exceeded") == "quota_exceeded"
+
+    def test_empty_string_returns_empty_string(self):
+        assert _format_ignored_field_reason("") == ""

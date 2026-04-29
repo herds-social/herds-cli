@@ -64,10 +64,11 @@ When a bug appears to be caused by the server (wrong status code, missing fields
 
 ## Versioning
 
-**Bump the version once per branch.** When a branch touches source under `herds_cli/`, increment the version one time on that branch — not on every commit during iterative development. Two files must stay in sync and move together in a single commit:
+**Bump the version once per branch.** When a branch touches source under `herds_cli/`, increment the version one time on that branch — not on every commit during iterative development. Three files must stay in sync and move together in a single commit:
 
 - `pyproject.toml` (the `version = "..."` field, currently line 7)
 - `herds_cli/__init__.py` (the `__version__ = "..."` constant, currently line 8)
+- `uv.lock` — regenerate by running `uv lock` after bumping the two source files; uv reads the new version from `pyproject.toml` and updates the lockfile's `herds-cli` entry. Skipping this step leaves `uv.lock` perpetually "modified" on subsequent `uv run` invocations and produces a stale lockfile in the commit history.
 
 Follow semver:
 
