@@ -19,7 +19,7 @@ import time
 import json
 from typing import Any, Dict, List, Literal, NoReturn, Optional, overload
 
-from .core.exceptions import SessionExpiredError
+from .core.exceptions import APIRequestError, SessionExpiredError
 from .output import OutputFormatter
 from .sessions import SessionManager
 from .types import (
@@ -358,16 +358,20 @@ class APIClient:
         start_time = time.time()
         try:
             response = self.session.request(method, url, **kwargs)
-        except requests.exceptions.Timeout:
-            raise Exception(
-                f"Request timed out after {self.timeout} seconds. "
-                f"Please check if the server is running at {self.base_url}"
+        except requests.exceptions.Timeout as exc:
+            msg = (
+                f"Request to {self.base_url} timed out after "
+                f"{self.timeout} seconds. Is the server running?"
             )
-        except requests.exceptions.ConnectionError as e:
-            raise Exception(
+            OutputFormatter.print_error(msg)
+            raise APIRequestError(msg) from exc
+        except requests.exceptions.ConnectionError as exc:
+            msg = (
                 f"Failed to connect to {self.base_url}. "
-                f"Please check if the server is running. Error: {e}"
+                f"Is the server running?"
             )
+            OutputFormatter.print_error(msg)
+            raise APIRequestError(msg) from exc
 
         self._log_response(response, start_time)
 

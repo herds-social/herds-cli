@@ -10,7 +10,7 @@ import pytest
 import requests
 
 from herds_cli.api import APIClient
-from herds_cli.core.exceptions import SessionExpiredError
+from herds_cli.core.exceptions import APIRequestError, SessionExpiredError
 
 
 class TestLoadSessionAuth:
@@ -409,18 +409,18 @@ class TestMakeRequest:
         call_kwargs = mock_api_client.session.request.call_args
         assert call_kwargs.kwargs.get("timeout") == 99
 
-    def test_timeout_raises_exception(self, mock_api_client):
+    def test_timeout_raises_api_request_error(self, mock_api_client):
         mock_api_client.session.request.side_effect = requests.exceptions.Timeout()
 
-        with pytest.raises(Exception, match="timed out"):
+        with pytest.raises(APIRequestError, match="timed out"):
             mock_api_client._make_request("GET", "http://localhost/api/test")
 
-    def test_connection_error_raises_exception(self, mock_api_client):
+    def test_connection_error_raises_api_request_error(self, mock_api_client):
         mock_api_client.session.request.side_effect = (
             requests.exceptions.ConnectionError("refused")
         )
 
-        with pytest.raises(Exception, match="Failed to connect"):
+        with pytest.raises(APIRequestError, match="Failed to connect"):
             mock_api_client._make_request("GET", "http://localhost/api/test")
 
 
