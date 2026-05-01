@@ -266,6 +266,9 @@ class EventCommandBase(CommandBase):
         display_info = f"{display_date}{location_display}{organizer_display}"
 
         OutputFormatter.print_info(f"Title: {title}")
+        event_id = event_data.get("id")
+        if event_id:
+            OutputFormatter.print_info(f"Event ID: {event_id}")
         OutputFormatter.print_info(f"Date: {display_info}")
         OutputFormatter.print_info(f"Category: {category}")
 
