@@ -359,9 +359,10 @@ class APIClient:
         try:
             response = self.session.request(method, url, **kwargs)
         except requests.exceptions.Timeout as exc:
+            effective_timeout = kwargs.get("timeout", self.timeout)
             msg = (
                 f"Request to {self.base_url} timed out after "
-                f"{self.timeout} seconds. Is the server running?"
+                f"{effective_timeout} seconds. Is the server running?"
             )
             OutputFormatter.print_error(msg)
             raise APIRequestError(msg) from exc
