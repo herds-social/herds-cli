@@ -195,7 +195,7 @@ class TestUploadPollSuccess:
 
         assert result.exit_code == 0, result.output
         out = strip_ansi(result.output)
-        assert "Image resized" in out
+        assert "Image processed" in out
         assert "Event extracted" in out
         assert "Extracted 1 event(s)" in out
         assert "Summer Concert" in out
@@ -230,7 +230,7 @@ class TestUploadPollSuccess:
         assert result.exit_code == 0, result.output
         out = strip_ansi(result.output)
         # Both stage transitions are announced exactly once.
-        assert out.count("Image resized") == 1
+        assert out.count("Image processed") == 1
         assert out.count("Event extracted") == 1
 
     def test_multiple_events_all_displayed(
@@ -637,7 +637,7 @@ class TestUploadDefaultBehavior:
         out = strip_ansi(result.output)
         assert "Successfully uploaded" in out
         # Nothing from the polling code path should appear.
-        assert "Image resized" not in out
+        assert "Image processed" not in out
         assert "Event extracted" not in out
 
 
@@ -795,7 +795,7 @@ class TestUploadAuthFailure:
         # Refresh happened invisibly; user sees only normal upload+poll output.
         assert "Session expired" not in out
         assert "Successfully uploaded" in out
-        assert "Image resized" in out
+        assert "Image processed" in out
         assert "Event extracted" in out
         assert "Summer Concert" in out  # rendered from SAMPLE_EVENT
         # Sanity: 5 calls total — original 401, refresh, retried upload, poll, events.

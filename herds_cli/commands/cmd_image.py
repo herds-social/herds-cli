@@ -114,10 +114,12 @@ def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode
         )
 
         OutputFormatter.print_success(f"Successfully uploaded {Path(file_path).name}")
+        image_id = result.get("image_id")
+        if image_id:
+            OutputFormatter.print_info(f"Image ID: {image_id}")
         OutputFormatter.print_info(f"Media type: {result.get('media_type', 'unknown')}")
 
         if poll:
-            image_id = result.get("image_id")
             if not image_id:
                 OutputFormatter.print_error(
                     "Upload response missing image_id; cannot poll for status"
@@ -203,7 +205,7 @@ def _poll_and_display_event(
             if extraction == "completed":
                 status.stop()
                 if not stage1_announced_done:
-                    OutputFormatter.print_success("Image resized")
+                    OutputFormatter.print_success("Image processed")
                 OutputFormatter.print_success("Event extracted")
                 break
 
@@ -212,14 +214,12 @@ def _poll_and_display_event(
                     # Print once when we transition out of stage 1 — gives the
                     # user a permanent record above the live spinner.
                     status.stop()
-                    OutputFormatter.print_success("Image resized")
+                    OutputFormatter.print_success("Image processed")
                     stage1_announced_done = True
                     status.start()
                 status.update("Extracting event details...")
             else:
-                status.update(
-                    f"Resizing image (resize={resize}, thumbnail={thumbnail})..."
-                )
+                status.update("Processing image...")
 
             if time.monotonic() >= deadline:
                 status.stop()
