@@ -11,7 +11,7 @@ it stays inline in EventCommandBase.display_event_details. This module only
 covers the no-add path.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from herds_cli.api import APIClient
 
@@ -97,14 +97,17 @@ _NEEDS_RECONNECT_PREFIX = (
 
 
 def render_calendar_status(
-    user_data: Dict[str, Any],
+    user_data: Mapping[str, Any],
     *,
     resolver: Optional[ReconnectProviderResolver] = None,
 ) -> CalendarStatusOutput:
     """Build the calendar-status output for one event.
 
     Args:
-        user_data: The event's `user_data` dict (may be empty).
+        user_data: The event's `user_data` mapping (may be empty). Typed
+            as Mapping rather than Dict so callers can pass an EventUserData
+            TypedDict (which isn't assignable to Dict[str, Any] under strict
+            type checking) without an explicit cast.
         resolver: Optional. Required only to produce a precise reconnect hint
             on `calendar_needs_reconnect` — without it (or if it returns None)
             the hint falls back to `<google|outlook>`.
