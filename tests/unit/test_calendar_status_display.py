@@ -151,3 +151,87 @@ class TestRenderCalendarStatus:
                 {"calendar_add_error": code}, resolver=resolver
             )
         resolver.get_provider.assert_not_called()
+
+
+class TestReconnectProviderResolver:
+    """The resolver caches one /api/calendar/status fetch per instance and
+    converts every non-success outcome (HTTP error, connected=False, exception)
+    into a None return so the renderer's placeholder fallback applies."""
+
+    def _make_api_client(self, response_or_exc):
+        """Build an APIClient stub whose _make_request returns the given mock
+        response, or raises if `response_or_exc` is an Exception."""
+        client = MagicMock()
+        client.base_url = "https://api.test"
+        if isinstance(response_or_exc, Exception):
+            client._make_request.side_effect = response_or_exc
+        else:
+            client._make_request.return_value = response_or_exc
+        return client
+
+    def _make_response(self, status_code=200, json_data=None):
+        resp = MagicMock(status_code=status_code)
+        resp.json.return_value = json_data if json_data is not None else {}
+        return resp
+
+    def test_caches_response_across_calls(self):
+        """Multiple get_provider() calls hit the API at most once."""
+        api_client = self._make_api_client(
+            self._make_response(json_data={"connected": True, "provider": "google"})
+        )
+        resolver = ReconnectProviderResolver(api_client)
+
+        for _ in range(3):
+            assert resolver.get_provider() == "google"
+
+        assert api_client._make_request.call_count == 1
+
+    def test_caches_none_result(self):
+        """A None result is also cached — we don't retry the API after a miss."""
+        api_client = self._make_api_client(
+            self._make_response(json_data={"connected": False})
+        )
+        resolver = ReconnectProviderResolver(api_client)
+
+        for _ in range(3):
+            assert resolver.get_provider() is None
+
+        assert api_client._make_request.call_count == 1
+
+    def test_returns_provider_on_connected(self):
+        api_client = self._make_api_client(
+            self._make_response(json_data={"connected": True, "provider": "outlook"})
+        )
+        assert ReconnectProviderResolver(api_client).get_provider() == "outlook"
+
+    def test_returns_none_when_not_connected(self):
+        api_client = self._make_api_client(
+            self._make_response(
+                json_data={"connected": False, "provider": "google"}
+            )
+        )
+        # Even if `provider` is set in the response, connected=False means
+        # there's no live connection to reconnect to.
+        assert ReconnectProviderResolver(api_client).get_provider() is None
+
+    def test_returns_none_on_http_error_status(self):
+        api_client = self._make_api_client(self._make_response(status_code=500))
+        assert ReconnectProviderResolver(api_client).get_provider() is None
+
+    def test_returns_none_on_request_exception(self):
+        """Network/connection errors must not bubble up — the caller wants a
+        calendar-status line, not a crash."""
+        api_client = self._make_api_client(ConnectionError("boom"))
+        assert ReconnectProviderResolver(api_client).get_provider() is None
+
+    def test_returns_none_when_provider_field_missing(self):
+        api_client = self._make_api_client(
+            self._make_response(json_data={"connected": True})
+        )
+        assert ReconnectProviderResolver(api_client).get_provider() is None
+
+    def test_returns_none_when_provider_field_empty_string(self):
+        api_client = self._make_api_client(
+            self._make_response(json_data={"connected": True, "provider": ""})
+        )
+        assert ReconnectProviderResolver(api_client).get_provider() is None
