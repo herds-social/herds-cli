@@ -235,3 +235,13 @@ class TestReconnectProviderResolver:
             self._make_response(json_data={"connected": True, "provider": ""})
         )
         assert ReconnectProviderResolver(api_client).get_provider() is None
+
+    def test_returns_none_when_response_json_raises(self):
+        """A 200 with malformed JSON (server returns HTML, etc.) must not crash —
+        the broad `except Exception` swallows the parse error and the resolver's
+        placeholder fallback applies. Pins the contract that the resolver
+        absorbs JSON-parse failures, not just network failures."""
+        resp = MagicMock(status_code=200)
+        resp.json.side_effect = ValueError("not json")
+        api_client = self._make_api_client(resp)
+        assert ReconnectProviderResolver(api_client).get_provider() is None
