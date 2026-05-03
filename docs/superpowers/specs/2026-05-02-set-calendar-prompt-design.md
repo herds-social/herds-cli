@@ -34,7 +34,7 @@ The two-step copy-paste is the main UX problem. The optional `--calendar-name` f
 
 ## Command signature
 
-```
+```bash
 herds calendar set-calendar [--email EMAIL] [--calendar-id ID] [--format json|table]
 ```
 
@@ -44,7 +44,7 @@ Removed: `--calendar-name`.
 
 ### Interactive flow (TTY + no flag + format != json)
 
-```
+```bash
 $ herds calendar set-calendar
 Select a calendar:
   1. Personal (primary)
@@ -80,7 +80,7 @@ The trailing `Calendar Name: Personal` line is read from the `PUT` response; the
 
 ### `set_calendar` control flow
 
-```
+```text
 set_calendar(ctx, email, calendar_id, format)
   ├── setup_session + load_session_auth                       (existing pattern)
   ├── if calendar_id is None:                                  (interactive branch)
