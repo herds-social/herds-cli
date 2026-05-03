@@ -394,3 +394,4 @@ class TestSetCalendar:
             )
 
         assert result.exit_code != 0
+        assert _put_bodies(cli_obj) == []
