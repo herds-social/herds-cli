@@ -8,8 +8,6 @@ OutputFormatter. No I/O, no Click context.
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from herds_cli.calendar_status_display import (
     ReconnectProviderResolver,
     render_calendar_status,
