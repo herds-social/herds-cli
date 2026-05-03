@@ -8,10 +8,64 @@ This module contains commands for connecting and managing calendar providers
 import click
 import sys
 import webbrowser
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from herds_cli.output import OutputFormatter
 from herds_cli.core.base import CommandBase, APIResponseHandler
+
+
+def _is_interactive() -> bool:
+    """Whether the command is running attached to a terminal.
+
+    Wrapped as a module-level function so tests can patch it independently
+    of CliRunner's stdin replacement.
+    """
+    return sys.stdin.isatty()
+
+
+def _prompt_for_calendar(
+    calendars: List[Dict[str, Any]],
+    status: Optional[Dict[str, Any]],
+) -> str:
+    """Show a numbered picker over `calendars` and return the chosen calendar's id.
+
+    `status` is the GET /api/calendar/status payload (or None if the read
+    failed). Used only to mark the currently-selected calendar with `(current)`
+    and to compute the smart default. The default picks the current selection
+    if present in the list, else the primary calendar, else the only calendar
+    when the list has one entry, else no default.
+
+    All list and prompt output goes to stderr (Click's default), keeping
+    stdout clean for `--format json` callers.
+    """
+    current_id = (status or {}).get("calendar_id") if (status or {}).get("connected") else None
+    current_idx: Optional[int] = None
+    primary_idx: Optional[int] = None
+
+    OutputFormatter.print_info("Select a calendar:")
+    for i, cal in enumerate(calendars, 1):
+        tags: List[str] = []
+        if cal.get("primary"):
+            tags.append("primary")
+            if primary_idx is None:
+                primary_idx = i
+        if current_id is not None and cal.get("id") == current_id:
+            tags.append("current")
+            current_idx = i
+        suffix = f" ({', '.join(tags)})" if tags else ""
+        OutputFormatter.print_info(f"  {i}. {cal.get('name', 'Unnamed')}{suffix}")
+
+    default_idx: Optional[int] = current_idx or primary_idx
+    if default_idx is None and len(calendars) == 1:
+        default_idx = 1
+
+    choice = click.prompt(
+        "Calendar",
+        type=click.IntRange(1, len(calendars)),
+        default=default_idx,
+        show_default=default_idx is not None,
+    )
+    return calendars[choice - 1]["id"]
 
 
 @click.group()
@@ -182,35 +236,97 @@ def list_calendars(ctx: click.Context, email: Optional[str]) -> None:
 
 @calendar.command("set-calendar")
 @click.option("--email", help="Email address (autodetect if only one session)")
-@click.option("--calendar-id", required=True, help="Calendar ID to use for new events")
-@click.option("--calendar-name", default=None, help="Display name for the calendar")
+@click.option(
+    "--calendar-id",
+    default=None,
+    help="Calendar ID to use for new events. If omitted on a TTY, an interactive picker is shown.",
+)
 @click.pass_context
-def set_calendar(ctx: click.Context, email: Optional[str], calendar_id: str, calendar_name: Optional[str]) -> None:
+def set_calendar(ctx: click.Context, email: Optional[str], calendar_id: Optional[str]) -> None:
     """Set which calendar to use for new events.
 
+    Run without arguments to pick a calendar interactively. Pass --calendar-id
+    to bypass the picker (required for non-interactive contexts: scripts, CI,
+    pipes, or --format json).
+
     Examples:
+        herds calendar set-calendar
         herds calendar set-calendar --calendar-id primary
-        herds calendar set-calendar --calendar-id abc123 --calendar-name "Work"
     """
     cmd = CommandBase(ctx)
 
     email = cmd.setup_session(email, show_client_type=True)
     cmd.load_session_auth(email)
 
+    if calendar_id is None:
+        if cmd.output_format == "json" or not _is_interactive():
+            OutputFormatter.print_error(
+                "--calendar-id is required when running non-interactively."
+            )
+            OutputFormatter.print_info(
+                "Run 'herds calendar list' to see available calendars."
+            )
+            sys.exit(1)
+
+        calendars = _fetch_calendars_for_picker(cmd)
+        status = _fetch_status_for_picker(cmd)
+        calendar_id = _prompt_for_calendar(calendars, status)
+
     url = f"{cmd.api_client.base_url}/api/calendar/settings"
-
-    data = {"calendar_id": calendar_id}
-    if calendar_name is not None:
-        data["calendar_name"] = calendar_name
-
     result = cmd.execute_api_request(
-        "PUT", url, "Calendar selection updated", json=data
+        "PUT", url, "Calendar selection updated", json={"calendar_id": calendar_id}
     )
 
     OutputFormatter.print_info(f"  Calendar ID:   {result.get('calendar_id', 'N/A')}")
-    OutputFormatter.print_info(f"  Calendar Name: {result.get('calendar_name', 'N/A')}")
+    OutputFormatter.print_info(f"  Calendar Name: {result.get('calendar_name') or 'N/A'}")
 
     APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+
+
+def _fetch_calendars_for_picker(cmd: CommandBase) -> List[Dict[str, Any]]:
+    """Fetch the user's calendars for the picker. Exits on connection / empty errors."""
+    url = f"{cmd.api_client.base_url}/api/calendar/list"
+    response = cmd.api_client._make_request("GET", url)
+
+    if response.status_code != 200:
+        try:
+            error_data = response.json()
+        except Exception:
+            error_data = {}
+        error_type = error_data.get("error_type", "")
+        message = error_data.get("message", "")
+        if response.status_code == 400 and error_type == "no_calendar_connection":
+            OutputFormatter.print_error(message or "No calendar connected.")
+            OutputFormatter.print_info(
+                "Run 'herds calendar connect --provider google' (or outlook) to connect."
+            )
+        else:
+            APIResponseHandler.handle_error_response(response, "list calendars")
+        sys.exit(1)
+
+    calendars = response.json().get("calendars", [])
+    if not calendars:
+        OutputFormatter.print_error(
+            "No calendars found. Verify your provider connection."
+        )
+        sys.exit(1)
+    return calendars
+
+
+def _fetch_status_for_picker(cmd: CommandBase) -> Optional[Dict[str, Any]]:
+    """Best-effort fetch of the connection status. Returns None on any failure
+    so the picker can still run without the (current) tag."""
+    url = f"{cmd.api_client.base_url}/api/calendar/status"
+    try:
+        response = cmd.api_client._make_request("GET", url)
+    except Exception:
+        return None
+    if response.status_code != 200:
+        return None
+    try:
+        return response.json()
+    except Exception:
+        return None
 
 
 @calendar.command("disconnect")
