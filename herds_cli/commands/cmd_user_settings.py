@@ -60,9 +60,6 @@ def get_settings(ctx: click.Context, email: Optional[str]) -> None:
 
     # Display settings
     settings = result.get("settings", {})
-    OutputFormatter.print_info(
-        f"Default Calendar: {settings.get('default_calendar', 'Not set')}"
-    )
     OutputFormatter.print_info(f"Sort By: {settings.get('sort_by', 'Not set')}")
     OutputFormatter.print_info(f"Filter By: {settings.get('filter_by', 'Not set')}")
     OutputFormatter.print_info(f"Theme: {settings.get('theme', 'Not set')}")
@@ -167,9 +164,6 @@ def _format_date_filter(date_filter: str | None) -> str:
 @user_settings.command("update")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.option(
-    "--default-calendar", help="Default calendar name (e.g., 'Family', 'Work')"
-)
-@click.option(
     "--sort-by",
     type=click.Choice(["utc_start", "date_start", "date_added", "date_modified"]),
     help="Default sort field for events",
@@ -207,7 +201,6 @@ def _format_date_filter(date_filter: str | None) -> str:
 def update_settings(
     ctx: click.Context,
     email: Optional[str],
-    default_calendar: Optional[str],
     sort_by: Optional[str],
     sort_order: Optional[str],
     filter_by: Optional[str],
@@ -220,9 +213,7 @@ def update_settings(
     Only specified fields will be updated; existing values are preserved for unspecified fields.
 
     Examples:
-        herds user-settings update --default-calendar "Family"
         herds user-settings update --sort-by date_start --sort-order desc --filter-by in_calendar
-        herds user-settings update --default-calendar "Work" --sort-by utc_start
         herds user-settings update --theme dark --auto-add-to-calendar=True
         herds user-settings update --theme system --auto-add-to-calendar=False
         herds user-settings update --date-filter upcoming
@@ -242,7 +233,6 @@ def update_settings(
     date_filter_provided = date_filter is not None
     if not any(
         [
-            default_calendar,
             sort_by,
             sort_order,
             filter_by,
@@ -260,8 +250,6 @@ def update_settings(
 
     # Build request data - only include non-None values
     settings = {}
-    if default_calendar is not None:
-        settings["default_calendar"] = default_calendar
     if sort_by is not None:
         settings["sort_by"] = sort_by
     if sort_order is not None:
@@ -304,9 +292,6 @@ def update_settings(
     else:
         OutputFormatter.print_success("Settings updated:")
 
-    OutputFormatter.print_info(
-        f"  Default Calendar: {updated_settings.get('default_calendar', 'Not set')}"
-    )
     OutputFormatter.print_info(
         f"  Sort By: {updated_settings.get('sort_by', 'Not set')}"
     )
