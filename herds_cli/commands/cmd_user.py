@@ -621,10 +621,6 @@ def info(ctx, email):
         if "settings" in user_data and user_data["settings"]:
             OutputFormatter.print_info("Settings:")
             settings = user_data["settings"]
-            if "default_calendar" in settings:
-                OutputFormatter.print_info(
-                    f"  Default calendar: {settings['default_calendar'] or 'None'}"
-                )
             if "sort_by" in settings:
                 OutputFormatter.print_info(
                     f"  Sort by: {settings['sort_by'] or 'None'}"

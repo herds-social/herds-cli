@@ -22,7 +22,6 @@ def _make_settings_response(ignored_fields=None, **settings_overrides):
     simulating an older server that doesn't return the field.
     """
     settings = {
-        "default_calendar": "Family",
         "sort_by": "utc_start",
         "sort_order": "asc",
         "filter_by": "all",
@@ -70,7 +69,7 @@ class TestUpdateSettings:
 
         result = cli_runner.invoke(
             cli,
-            ["user-settings", "update", "--default-calendar", "Family"],
+            ["user-settings", "update", "--sort-by", "date_start"],
             obj=cli_obj,
         )
 
@@ -216,7 +215,7 @@ class TestUpdateSettings:
 
         result = cli_runner.invoke(
             cli,
-            ["user-settings", "update", "--default-calendar", "Family"],
+            ["user-settings", "update", "--sort-by", "date_start"],
             obj=cli_obj,
         )
 

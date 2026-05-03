@@ -202,7 +202,6 @@ class LoginResponse(TypedDict, total=False):
 class UserSettings(TypedDict, total=False):
     """User preference settings from GET /api/users/me."""
 
-    default_calendar: Optional[str]
     sort_by: Optional[str]
     filter_by: Optional[str]
 
