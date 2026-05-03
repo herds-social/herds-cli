@@ -294,9 +294,10 @@ class TestUploadPollSuccess:
 
 
 class TestUploadPollCalendarSuccessAndDefault:
-    """When the server auto-adds the event to a calendar (either via the
-    --add-to-calendar flag or the user's auto_add_to_calendar_enabled setting),
-    polling should surface that status as part of the per-event display."""
+    """Coverage for the calendar-status display branches that aren't tied
+    to a specific calendar_add_error code: the auto-add-success branch and
+    the absent-user_data default. Per-error-code coverage lives in
+    TestUploadPollCalendarStatus below."""
 
     def test_event_added_to_google_calendar_displayed(
         self, cli_runner, cli_obj, mock_session_manager, tmp_path
