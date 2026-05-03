@@ -206,20 +206,17 @@ class APIResponseHandler:
         return error_msg
 
     @staticmethod
-    def format_and_output(result: Any, output_format: str, skip_table: bool = False) -> None:
-        """Format and output response data.
+    def format_and_output(result: Any, output_format: str) -> None:
+        """Format and emit response data on the data channel (stdout).
 
-        Args:
-            result: The data to format and output
-            output_format: The output format ('json', 'table', etc.)
-            skip_table: If True, skip output when format is 'table' (for commands with custom table formatting)
+        For ``"json"`` this writes a JSON dump via ``click.echo``. For
+        ``"text"`` it writes nothing — the human-readable rendering is
+        already on stderr (via ``OutputFormatter.print_*`` calls earlier in
+        the command), so stdout stays clean for redirects and pipes.
         """
-        # Always output non-table formats (json, etc.)
-        # Only skip table format if skip_table is True
-        if output_format != "table" or not skip_table:
-            output = OutputFormatter.format_output(result, output_format)
-            if output:
-                click.echo(output)
+        output = OutputFormatter.format_output(result, output_format)
+        if output:
+            click.echo(output)
 
 
 class EventCommandBase(CommandBase):

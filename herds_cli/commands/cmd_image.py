@@ -130,7 +130,7 @@ def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode
             return
 
         # Output formatted response
-        if output_format != "table":  # table format already printed above
+        if output_format == "json":  # text mode already rendered via print_info above
             output = OutputFormatter.format_output(result, output_format)
             if output:  # Only print if there's content
                 click.echo(output)
@@ -275,7 +275,7 @@ def get(ctx, image_id, email):
     cmd.display_image_summary(cast(ImageV2Response, result))
 
     # Output formatted response
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @image.command()
@@ -338,7 +338,7 @@ def detections(ctx, image_id, email):
         OutputFormatter.print_warning("No detections found for this image")
 
     # Output formatted response
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @image.command("in-progress")
@@ -451,7 +451,7 @@ def in_progress(ctx, email, limit, offset, sort_by, sort_order):
         OutputFormatter.print_warning("No images currently in progress")
 
     # Output formatted response
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @image.command()
@@ -486,7 +486,7 @@ def delete(ctx, image_id, email, yes):
     OutputFormatter.print_success(f"Successfully deleted image {image_id}")
 
     # Output formatted response
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @image.command()

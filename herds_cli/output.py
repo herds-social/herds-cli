@@ -4,9 +4,11 @@ Herds CLI Output Formatting Module
 Handles different output formats for CLI responses using Rich.
 
 OutputFormatter is a stateless namespace of static methods:
-- print_success/error/warning/info output status messages via Rich Console (stderr).
-- format_output serializes data to a string (JSON or table format).
-- format_table renders a dict as a Rich table or falls back to JSON for lists.
+- print_success/error/warning/info output status messages via Rich Console
+  (stderr — keeps stdout clean for JSON and other data output).
+- format_output serializes data to a string (JSON only; text mode emits
+  nothing on stdout, since the print_* helpers above already render the
+  human-readable summary on stderr).
 
 For command output that respects the --format flag, prefer
 APIResponseHandler.format_and_output (core/base.py) instead of calling
@@ -17,13 +19,14 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
-from rich.table import Table
 
 if TYPE_CHECKING:
     from .core.config import Config
 
-# Initialize rich console for beautiful output
-console = Console()
+# Diagnostic/status output goes to stderr so stdout stays clean for JSON
+# (or other future structured formats). Pipes like `herds X | jq` get only
+# the JSON; the user still sees status messages on their terminal.
+console = Console(stderr=True)
 
 
 class OutputFormatter:
@@ -31,31 +34,16 @@ class OutputFormatter:
 
     @staticmethod
     def format_output(data: dict[str, Any] | list[Any], format_type: str = "json") -> str:
-        """Format data according to the specified format."""
+        """Format data for the data channel (stdout).
+
+        Returns a JSON string for ``"json"``; returns ``""`` for ``"text"``
+        because human-readable output is emitted via the print_* helpers
+        on stderr — the data channel stays empty so redirects (`> file.txt`)
+        and pipes don't capture status noise.
+        """
         if format_type == "json":
             return json.dumps(data, indent=2)
-        elif format_type == "table":
-            return OutputFormatter.format_table(data)
-        else:
-            return str(data)
-
-    @staticmethod
-    def format_table(data: dict[str, Any] | list[Any]) -> str:
-        """Format data as a rich table."""
-        if isinstance(data, dict):
-            table = Table(title="API Response")
-            table.add_column("Field", style="cyan")
-            table.add_column("Value", style="green")
-
-            for key, value in data.items():
-                if isinstance(value, dict):
-                    value = json.dumps(value, indent=2)
-                table.add_row(str(key), str(value))
-
-            console.print(table)
-            return ""  # Table is already printed
-        else:
-            return json.dumps(data, indent=2)
+        return ""
 
     @staticmethod
     def print_success(message: str) -> None:

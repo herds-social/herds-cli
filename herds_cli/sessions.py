@@ -18,8 +18,8 @@ from herds_cli.types import SessionData, SessionListEntry
 
 from rich.console import Console
 
-# Initialize rich console for beautiful output
-console = Console()
+# Diagnostic output goes to stderr so stdout stays clean for command data.
+console = Console(stderr=True)
 
 
 HERDS_DIR = Path.home() / ".herds"

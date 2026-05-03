@@ -157,7 +157,7 @@ herds events list
 ```
 --config PATH          Path to JSON config file
 --base-url TEXT        API base URL (overrides config)
---format [json|table]  Output format [default: json]
+--format [json|text|auto]  Output format [default: auto — text on a TTY, json when piped]
 -v, --verbose          Verbose output
 -d, --debug-requests   Show HTTP request/response details
 --timezone TEXT        Timezone override (auto-detected by default)
@@ -178,8 +178,8 @@ The CLI loads settings in this order (last wins):
 # Set the API URL to local dev server
 herds config set api_url --local
 
-# Switch to table output
-herds config set output_format table
+# Force JSON output (default 'auto' picks JSON when piped)
+herds config set output_format json
 
 # Save your config for reuse
 herds config save my-config.json

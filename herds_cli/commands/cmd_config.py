@@ -42,8 +42,8 @@ CONFIG_KEYS: dict[str, ConfigKeyInfo] = {
     },
     "output_format": {
         "type": "choice",
-        "choices": ["json", "table"],
-        "description": "Output format (json or table)",
+        "choices": ["json", "text", "auto"],
+        "description": "Output format (json, text, or auto — auto picks text on a TTY, json when piped)",
         "current": None,
     },
     "verbose": {

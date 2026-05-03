@@ -54,7 +54,12 @@ class Config:
     api_timeout: int = 30
 
     # Output settings
-    output_format: str = "json"
+    #
+    # "auto" is the unresolved sentinel that cli.py replaces with a concrete
+    # value ("text" if stdout is a TTY, "json" otherwise) before commands
+    # consume self.output_format. Saved configs and HERDS_OUTPUT_FORMAT may
+    # also use "auto" explicitly to opt into TTY-aware rendering.
+    output_format: str = "auto"
     verbose: bool = False
     debug_requests: bool = False
 
@@ -192,9 +197,9 @@ class Config:
             )
 
         # Validate output format
-        if self.output_format not in ["json", "table"]:
+        if self.output_format not in ["json", "text", "auto"]:
             self._validation_errors.append(
-                f"Output format must be 'json' or 'table', got: {self.output_format}"
+                f"Output format must be 'json', 'text', or 'auto', got: {self.output_format}"
             )
 
         # Validate timezone if provided

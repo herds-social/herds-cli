@@ -82,16 +82,19 @@ class TestPing:
         assert parsed["env"] == "production"
         assert parsed["message"].startswith("Failed to ping")
 
-    def test_table_format_substitutes_em_dash_for_nulls(
+    def test_text_format_substitutes_em_dash_for_nulls(
         self, cli_runner, cli_obj
     ):
-        """Table mode renders an em-dash where the JSON would be null.
+        """Text mode renders each field via print_info, substituting an
+        em-dash for ``None`` (literal ``str(None)`` would read as the word
+        'None'). Output goes to stderr; CliRunner captures it into
+        ``result.output`` because the default runner mixes the streams.
 
         The cli() group short-circuits when ``_initialized`` is set, so
-        CLI flags like ``--format`` never reach the config in tests.
-        We mutate the config directly to exercise table mode.
+        CLI flags like ``--format`` never reach the config in tests; we
+        mutate the config directly to exercise text mode.
         """
-        cli_obj["config"].output_format = "table"
+        cli_obj["config"].output_format = "text"
         _mock_ping_response(cli_obj["api_client"], DB_FAILURE_PAYLOAD)
 
         result = cli_runner.invoke(cli, ["ping"], obj=cli_obj)

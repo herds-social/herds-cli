@@ -70,7 +70,7 @@ def get_settings(ctx: click.Context, email: Optional[str]) -> None:
     OutputFormatter.print_info(f"Date Filter: {_format_date_filter(date_filter)}")
 
     # Output formatted response
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 def parse_bool_value(ctx: click.Context, param: click.Parameter, value: str | bool | None) -> bool | None:
@@ -307,4 +307,4 @@ def update_settings(
     OutputFormatter.print_info(f"  Date Filter: {_format_date_filter(date_filter)}")
 
     # Output formatted response (JSON path includes ignored_fields verbatim)
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)

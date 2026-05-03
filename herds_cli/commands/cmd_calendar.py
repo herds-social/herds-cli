@@ -163,7 +163,7 @@ def status(ctx: click.Context, email: Optional[str]) -> None:
             "Use 'calendar connect --provider google' or '--provider outlook' to connect."
         )
 
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @calendar.command("list")
@@ -206,7 +206,7 @@ def list_calendars(ctx: click.Context, email: Optional[str]) -> None:
                 "Use 'calendar set-calendar --calendar-id <ID>' to select one."
             )
 
-            APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+            APIResponseHandler.format_and_output(result, cmd.output_format)
             return
 
         # Error path — parse body once, branch on known error types.
@@ -259,7 +259,7 @@ def set_calendar(ctx: click.Context, email: Optional[str], calendar_id: Optional
     cmd.load_session_auth(email)
 
     if calendar_id is None:
-        if cmd.output_format == "json" or not _is_interactive():
+        if not _is_interactive():
             OutputFormatter.print_error(
                 "--calendar-id is required when running non-interactively."
             )
@@ -280,7 +280,7 @@ def set_calendar(ctx: click.Context, email: Optional[str], calendar_id: Optional
     OutputFormatter.print_info(f"  Calendar ID:   {result.get('calendar_id', 'N/A')}")
     OutputFormatter.print_info(f"  Calendar Name: {result.get('calendar_name') or 'N/A'}")
 
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 def _fetch_calendars_for_picker(cmd: CommandBase) -> List[Dict[str, Any]]:
@@ -391,7 +391,7 @@ def add_event(ctx: click.Context, event_id: str, email: Optional[str]) -> None:
             OutputFormatter.print_success("Event added to calendar!")
             OutputFormatter.print_info(f"  Provider:          {result.get('provider', 'N/A')}")
             OutputFormatter.print_info(f"  Calendar Event ID: {result.get('calendar_event_id', 'N/A')}")
-            APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+            APIResponseHandler.format_and_output(result, cmd.output_format)
             return
 
         # Handle known error types

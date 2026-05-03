@@ -51,6 +51,20 @@ class HerdsGroup(click.Group):
             sys.exit(1)
 
 
+def resolve_format_default(format_value: str, isatty: bool) -> str:
+    """Resolve the ``"auto"`` sentinel to a concrete output format.
+
+    ``"auto"`` becomes ``"text"`` when stdout is a TTY (humans get clean
+    human-readable output, no trailing JSON dump) and ``"json"`` when piped
+    or redirected (so ``herds X | jq`` works without explicitly passing
+    ``--format json``). Other values pass through unchanged so explicit
+    flags / env vars / saved configs always win.
+    """
+    if format_value == "auto":
+        return "text" if isatty else "json"
+    return format_value
+
+
 def detect_system_timezone() -> str:
     """
     Auto-detect system timezone with fallback to UTC.
@@ -126,8 +140,11 @@ def validate_timezone(timezone: str) -> str:
 @click.option(
     "--format",
     "output_format",
-    type=click.Choice(["json", "table"]),
-    help="Output format (overrides config)",
+    type=click.Choice(["json", "text", "auto"]),
+    help=(
+        "Output format (overrides config). 'auto' (default) picks 'text' "
+        "when stdout is a TTY and 'json' when piped or redirected."
+    ),
 )
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output (overrides config)")
 @click.option(
@@ -214,6 +231,15 @@ def cli(
         for error in config_obj.get_validation_errors():
             OutputFormatter.print_error(f"  - {error}")
         sys.exit(1)
+
+    # Resolve "auto" → concrete format. We do this once, after every layer
+    # (defaults → env → file → CLI flag) has had its say, so commands
+    # downstream only see "text" or "json". TTY check is on stdout because
+    # that's the channel JSON would land on; stdin's TTY status is checked
+    # separately by interactive pickers (see cmd_calendar._is_interactive).
+    config_obj.output_format = resolve_format_default(
+        config_obj.output_format, sys.stdout.isatty()
+    )
 
     # Print current configuration summary
     if config_obj.verbose:

@@ -7,6 +7,7 @@ import os
 
 import pytest
 
+from herds_cli.cli import resolve_format_default
 from herds_cli.core.config import Config
 
 
@@ -15,7 +16,9 @@ class TestConfigDefaults:
         config = Config()
         assert config.api_url == "http://localhost:8000"
         assert config.api_timeout == 30
-        assert config.output_format == "json"
+        # "auto" is the unresolved sentinel — cli.py replaces it with
+        # "text" or "json" based on stdout's TTY status before commands run.
+        assert config.output_format == "auto"
         assert config.verbose is False
         assert config.debug_requests is False
         assert config.timezone is None
@@ -31,13 +34,13 @@ class TestConfigLoadFromFile:
         tmp_config_file.write_text(json.dumps({
             "api_url": "https://example.com",
             "api_timeout": 60,
-            "output_format": "table",
+            "output_format": "text",
         }))
 
         config = Config.load(str(tmp_config_file))
         assert config.api_url == "https://example.com"
         assert config.api_timeout == 60
-        assert config.output_format == "table"
+        assert config.output_format == "text"
 
     def test_load_missing_file_raises(self, tmp_path):
         with pytest.raises(FileNotFoundError):
@@ -87,7 +90,7 @@ class TestConfigLoadFromFile:
         tmp_config_file.write_text(json.dumps({
             "api_url": "https://custom.example.com",
             "api_timeout": 99,
-            "output_format": "table",
+            "output_format": "text",
             "verbose": True,
             "debug_requests": True,
             "timezone": "UTC",
@@ -98,7 +101,7 @@ class TestConfigLoadFromFile:
         config = Config.load(str(tmp_config_file))
         assert config.api_url == "https://custom.example.com"
         assert config.api_timeout == 99
-        assert config.output_format == "table"
+        assert config.output_format == "text"
         assert config.verbose is True
         assert config.debug_requests is True
         assert config.timezone == "UTC"
@@ -114,7 +117,7 @@ class TestConfigLoadFromEnv:
     def test_env_overrides_defaults(self, monkeypatch):
         monkeypatch.setenv("HERDS_API_URL", "https://env.example.com")
         monkeypatch.setenv("HERDS_API_TIMEOUT", "10")
-        monkeypatch.setenv("HERDS_OUTPUT_FORMAT", "table")
+        monkeypatch.setenv("HERDS_OUTPUT_FORMAT", "text")
         monkeypatch.setenv("HERDS_VERBOSE", "true")
         monkeypatch.setenv("HERDS_DEBUG_REQUESTS", "1")
         monkeypatch.setenv("HERDS_TIMEZONE", "UTC")
@@ -123,7 +126,7 @@ class TestConfigLoadFromEnv:
         config = Config.load()
         assert config.api_url == "https://env.example.com"
         assert config.api_timeout == 10
-        assert config.output_format == "table"
+        assert config.output_format == "text"
         assert config.verbose is True
         assert config.debug_requests is True
         assert config.timezone == "UTC"
@@ -159,7 +162,7 @@ class TestConfigSave:
         config = Config(
             api_url="https://saved.example.com",
             api_timeout=15,
-            output_format="table",
+            output_format="text",
             default_account="test@example.com",
         )
         config.save(str(tmp_config_file))
@@ -167,7 +170,7 @@ class TestConfigSave:
         loaded = Config.load(str(tmp_config_file))
         assert loaded.api_url == "https://saved.example.com"
         assert loaded.api_timeout == 15
-        assert loaded.output_format == "table"
+        assert loaded.output_format == "text"
         assert loaded.default_account == "test@example.com"
 
     def test_save_excludes_internal_fields(self, tmp_config_file):
@@ -221,6 +224,24 @@ class TestConfigValidation:
         assert config.validate() is False
         assert any("format" in e for e in config.get_validation_errors())
 
+    def test_legacy_table_format_rejected(self):
+        """The old 'table' choice was removed in 2.0 — saved configs that
+        still carry it must surface a validation error so the user knows
+        to migrate to 'text' or 'auto' instead of getting silent fallthrough."""
+        config = Config(output_format="table")
+        assert config.validate() is False
+        assert any("format" in e for e in config.get_validation_errors())
+
+    def test_auto_format_validates(self):
+        """'auto' is a valid sentinel; cli.py replaces it with 'text'/'json'
+        based on stdout's TTY status before commands consume it."""
+        config = Config(output_format="auto")
+        assert config.validate() is True
+
+    def test_text_format_validates(self):
+        config = Config(output_format="text")
+        assert config.validate() is True
+
     def test_invalid_timezone(self):
         config = Config(timezone="Not/A/Timezone")
         assert config.validate() is False
@@ -273,6 +294,27 @@ class TestConfigValidation:
         config.validate()
         errors = config.get_validation_errors()
         assert len(errors) >= 4
+
+
+class TestResolveFormatDefault:
+    """The sentinel resolution that turns 'auto' into 'text'/'json' based on
+    whether stdout is a TTY. Lives in cli.py because it depends on process
+    I/O state, but the function itself is pure given an explicit isatty arg."""
+
+    def test_auto_with_tty_returns_text(self):
+        assert resolve_format_default("auto", isatty=True) == "text"
+
+    def test_auto_without_tty_returns_json(self):
+        assert resolve_format_default("auto", isatty=False) == "json"
+
+    def test_concrete_text_passes_through(self):
+        # Explicit text — TTY status is irrelevant; user already chose.
+        assert resolve_format_default("text", isatty=True) == "text"
+        assert resolve_format_default("text", isatty=False) == "text"
+
+    def test_concrete_json_passes_through(self):
+        assert resolve_format_default("json", isatty=True) == "json"
+        assert resolve_format_default("json", isatty=False) == "json"
 
 
 class TestConfigToDict:
