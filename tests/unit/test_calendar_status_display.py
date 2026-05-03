@@ -27,14 +27,19 @@ class TestRenderCalendarStatus:
         assert result == [("info", "Not added to a calendar")]
 
     def test_auto_add_disabled_renders_info_with_settings_hint(self):
+        """Locks in the canonical full-message string for one known code:
+        the 'Not added to calendar:' prefix, the '\\n   ' (3-space) indent,
+        and the exact remediation command. Other known-code tests stay loose
+        (substring-only) so a wording tweak can update one canonical assertion
+        rather than five."""
         result = render_calendar_status(
             {"calendar_add_error": "auto_add_disabled"}
         )
-        assert len(result) == 1
-        severity, message = result[0]
-        assert severity == "info"
-        assert "auto-add is disabled in your settings" in message
-        assert "herds user-settings update --auto-add-to-calendar=True" in message
+        assert result == [(
+            "info",
+            "Not added to calendar: auto-add is disabled in your settings\n"
+            "   Enable with: herds user-settings update --auto-add-to-calendar=True",
+        )]
 
     def test_no_calendar_connection_renders_info_with_connect_hint(self):
         result = render_calendar_status(
@@ -83,6 +88,17 @@ class TestRenderCalendarStatus:
         severity, message = result[0]
         assert severity == "info"
         assert "auto-add is disabled in your settings" in message
+
+    def test_non_string_code_falls_back_safely(self):
+        """A non-string truthy value (e.g. an integer from a server bug) must
+        not raise. It bypasses the truthy fallback (it's truthy), bypasses the
+        lowercase normalization (not str), and lands in the unknown-code branch
+        where the raw value gets stringified into the warning message."""
+        result = render_calendar_status({"calendar_add_error": 42})
+        assert len(result) == 1
+        severity, message = result[0]
+        assert severity == "warning"
+        assert "42" in message
 
     # ----- calendar_needs_reconnect: the only code that consults the resolver -----
 

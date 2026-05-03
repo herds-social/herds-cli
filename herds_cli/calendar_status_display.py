@@ -55,8 +55,13 @@ class ReconnectProviderResolver:
                     raw = data.get("provider")
                     provider = raw if isinstance(raw, str) and raw else None
         except Exception:
-            # Swallow — the renderer's placeholder fallback is safer than
-            # bubbling up and masking the calendar-status message itself.
+            # Swallow on purpose — the renderer's placeholder fallback is
+            # safer than bubbling up and masking the calendar-status message.
+            # This intentionally also swallows SessionExpiredError raised by
+            # APIClient._make_request: by the time it reaches us, _make_request
+            # has already surfaced an OutputFormatter.print_error to the user
+            # describing the auth failure, so re-raising here would only add
+            # a second crashy stack trace on top of the existing notice.
             provider = None
         self._cached = provider
         return provider
