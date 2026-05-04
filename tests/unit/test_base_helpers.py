@@ -118,6 +118,8 @@ class TestGetOrDetectSessionEmail:
             )
 
         captured = capsys.readouterr()
+        # The "mobile"/"web" client_type tags are emitted via click.echo,
+        # which (unlike OutputFormatter.print_*) writes to stdout.
         assert "mobile" in captured.out
         assert "web" in captured.out
 
@@ -178,7 +180,7 @@ class TestDisplayEventsSummary:
     def test_empty_list_warns(self, capsys):
         display_events_summary([])
         captured = capsys.readouterr()
-        assert "No events found" in captured.out
+        assert "No events found" in captured.err
 
     def test_shows_event_details(self, capsys):
         events = [{
@@ -194,9 +196,9 @@ class TestDisplayEventsSummary:
 
         display_events_summary(events)
         captured = capsys.readouterr()
-        assert "Jazz Night" in captured.out
-        assert "Austin, TX" in captured.out
-        assert "Blue Note" in captured.out
+        assert "Jazz Night" in captured.err
+        assert "Austin, TX" in captured.err
+        assert "Blue Note" in captured.err
 
     def test_truncates_at_five(self, capsys):
         events = [
@@ -206,16 +208,16 @@ class TestDisplayEventsSummary:
 
         display_events_summary(events)
         captured = capsys.readouterr()
-        assert "Event 0" in captured.out
-        assert "Event 4" in captured.out
-        assert "Event 5" not in captured.out
-        assert "3 more events" in captured.out
+        assert "Event 0" in captured.err
+        assert "Event 4" in captured.err
+        assert "Event 5" not in captured.err
+        assert "3 more events" in captured.err
 
     def test_handles_missing_fields(self, capsys):
         events = [{"title": "Minimal Event"}]
         display_events_summary(events)
         captured = capsys.readouterr()
-        assert "Minimal Event" in captured.out
+        assert "Minimal Event" in captured.err
 
 
 class TestDisplayEventDetails:
@@ -233,7 +235,7 @@ class TestDisplayEventDetails:
         so a stub ctx is sufficient — we just need __init__ to succeed."""
         ctx = MagicMock()
         config = MagicMock()
-        config.output_format = "table"
+        config.output_format = "text"
         ctx.obj = {
             "config": config,
             "session_manager": MagicMock(),
@@ -253,7 +255,7 @@ class TestDisplayEventDetails:
         """When user_data is absent or empty, an explicit 'Not added' line
         appears so the user isn't left wondering whether the add ran."""
         self._make_cmd().display_event_details(self.BASE_EVENT)
-        out = capsys.readouterr().out
+        out = capsys.readouterr().err
         assert "Summer Concert" in out  # sanity: rest of the display ran
         assert "Not added to a calendar" in out
         # The success/failure variants must NOT also appear in this state.
@@ -264,7 +266,7 @@ class TestDisplayEventDetails:
         """An explicit empty user_data dict behaves the same as missing one."""
         event = {**self.BASE_EVENT, "user_data": {}}
         self._make_cmd().display_event_details(event)
-        out = capsys.readouterr().out
+        out = capsys.readouterr().err
         assert "Not added to a calendar" in out
 
     def test_google_add_success_with_target(self, capsys):
@@ -277,7 +279,7 @@ class TestDisplayEventDetails:
             },
         }
         self._make_cmd().display_event_details(event)
-        out = capsys.readouterr().out
+        out = capsys.readouterr().err
         assert "Added to Google calendar" in out
         assert "primary" in out
         assert "g-evt-123" in out
@@ -289,7 +291,7 @@ class TestDisplayEventDetails:
             "user_data": {"outlook_calendar_id": "o-evt-456"},
         }
         self._make_cmd().display_event_details(event)
-        out = capsys.readouterr().out
+        out = capsys.readouterr().err
         assert "Added to Outlook calendar" in out
         assert "o-evt-456" in out
         assert "(calendar:" not in out  # no target → no parenthetical
@@ -300,7 +302,7 @@ class TestDisplayEventDetails:
             "user_data": {"apple_calendar_id": "a-evt-789"},
         }
         self._make_cmd().display_event_details(event)
-        out = capsys.readouterr().out
+        out = capsys.readouterr().err
         assert "Added to Apple calendar" in out
         assert "a-evt-789" in out
 
@@ -313,7 +315,7 @@ class TestDisplayEventDetails:
             "user_data": {"calendar_add_error": "no_calendar_connection"},
         }
         self._make_cmd().display_event_details(event)
-        out = capsys.readouterr().out
+        out = capsys.readouterr().err
         assert "Not added to calendar: no calendar provider connected" in out
         assert "herds calendar connect --provider google" in out
         # The literal "Calendar add failed" wording is gone for known codes.
@@ -327,7 +329,7 @@ class TestDisplayEventDetails:
             "user_data": {"calendar_add_error": "calendar_quota_exhausted"},
         }
         self._make_cmd().display_event_details(event)
-        out = capsys.readouterr().out
+        out = capsys.readouterr().err
         assert "calendar_quota_exhausted" in out
 
     def test_success_takes_precedence_over_error(self, capsys):
@@ -341,7 +343,7 @@ class TestDisplayEventDetails:
             },
         }
         self._make_cmd().display_event_details(event)
-        out = capsys.readouterr().out
+        out = capsys.readouterr().err
         assert "Added to Google calendar" in out
         assert "Calendar add failed" not in out
 
@@ -361,7 +363,7 @@ class TestAPIResponseHandler:
         resp = self._make_response(400, {"detail": "Missing required field"})
         APIResponseHandler.handle_error_response(resp, "create event")
         captured = capsys.readouterr()
-        assert "Missing required field" in captured.out
+        assert "Missing required field" in captured.err
 
     def test_status_code_default_messages(self, capsys):
         for code, expected in [
@@ -374,22 +376,22 @@ class TestAPIResponseHandler:
             resp = self._make_response(code, {})
             APIResponseHandler.handle_error_response(resp, "test")
             captured = capsys.readouterr()
-            assert expected in captured.out
+            assert expected in captured.err
 
     def test_unknown_status_code(self, capsys):
         resp = self._make_response(418, {})
         APIResponseHandler.handle_error_response(resp, "test")
         captured = capsys.readouterr()
-        assert "418" in captured.out
+        assert "418" in captured.err
 
     def test_no_json_falls_back_to_text(self, capsys):
         resp = self._make_response(502, json_data=None, text="Bad Gateway")
         APIResponseHandler.handle_error_response(resp, "test")
         captured = capsys.readouterr()
-        assert "Bad Gateway" in captured.out
+        assert "Bad Gateway" in captured.err
 
     def test_includes_operation_name(self, capsys):
         resp = self._make_response(404, {"detail": "not found"})
         APIResponseHandler.handle_error_response(resp, "GET /api/events/123")
         captured = capsys.readouterr()
-        assert "GET /api/events/123" in captured.out
+        assert "GET /api/events/123" in captured.err

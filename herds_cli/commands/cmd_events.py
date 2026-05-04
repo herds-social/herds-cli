@@ -115,7 +115,7 @@ def list_events(
         display_events_summary(events)
 
         # Output formatted response
-        APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+        APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @events.command()
@@ -145,7 +145,7 @@ def get(ctx: click.Context, event_id: str, email: Optional[str]) -> None:
     cmd.display_event_details(cast(EventV2, result))
 
     # Output formatted response
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @events.command()
@@ -180,7 +180,7 @@ def delete(ctx: click.Context, event_id: str, email: Optional[str], yes: bool) -
     OutputFormatter.print_success(f"Successfully deleted event {event_id}")
 
     # Output formatted response
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @events.command("by-image")
@@ -217,14 +217,14 @@ def get_events_by_image_id(ctx: click.Context, image_id: str, email: Optional[st
         display_events_summary(events)
 
         # Output formatted response
-        APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+        APIResponseHandler.format_and_output(result, cmd.output_format)
 
     except Exception as e:
         # Handle the case where no events are found (404)
         if "No events found" in str(e):
             OutputFormatter.print_warning(f"No events found for image {image_id}")
             # Return empty result for formatting
-            APIResponseHandler.format_and_output([], cmd.output_format, skip_table=True)
+            APIResponseHandler.format_and_output([], cmd.output_format)
         else:
             # Re-raise other exceptions
             raise
@@ -385,7 +385,7 @@ def update_event(
     cmd.display_event_details(cast(EventV2, result))
 
     # Output formatted response
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 def _build_event_update_data(

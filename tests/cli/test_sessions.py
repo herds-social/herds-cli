@@ -109,7 +109,7 @@ class TestSessionManagerKeyValidation:
 
         assert result is None
         captured = capsys.readouterr()
-        assert "client_type" in captured.out
+        assert "client_type" in captured.err
 
     def test_missing_email_returns_none(self, mock_session_manager, capsys):
         """A session file without email is treated as invalid."""
@@ -123,7 +123,7 @@ class TestSessionManagerKeyValidation:
 
         assert result is None
         captured = capsys.readouterr()
-        assert "email" in captured.out
+        assert "email" in captured.err
 
     def test_valid_session_loads_normally(self, mock_session_manager):
         """Sessions with all required keys load successfully."""
@@ -149,8 +149,8 @@ class TestSessionManagerKeyValidation:
 
         assert result is None
         captured = capsys.readouterr()
-        assert "client_type" in captured.out
-        assert "email" in captured.out
+        assert "client_type" in captured.err
+        assert "email" in captured.err
 
 
 class TestSessionManagerList:

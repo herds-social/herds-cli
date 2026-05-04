@@ -51,15 +51,16 @@ def _render(data: PingResponse, output_format: str) -> None:
     """Print the ping payload.
 
     JSON output passes the dict through unchanged so machine consumers
-    see real ``null`` values. Table output substitutes an em-dash for
-    ``None`` because the default ``str(None)`` rendering is ugly in a
-    Rich table.
+    see real ``null`` values. Text output renders each field on stderr
+    via print_info, substituting an em-dash for ``None`` because the
+    default ``str(None)`` rendering reads as a literal "None" word.
     """
     if output_format == "json":
         APIResponseHandler.format_and_output(data, output_format)
         return
-    display = {k: ("—" if v is None else v) for k, v in data.items()}
-    APIResponseHandler.format_and_output(display, output_format)
+    for key, value in data.items():
+        display_value = "—" if value is None else value
+        OutputFormatter.print_info(f"  {key}: {display_value}")
 
 
 def _evaluate_ping(data: PingResponse) -> int:

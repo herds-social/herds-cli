@@ -345,7 +345,7 @@ class TestFormatErrorMessage:
         msg = APIResponseHandler.handle_error_response(resp, "get event")
         assert msg == "HTTP 404: Event not found"
         captured = capsys.readouterr()
-        assert "get event" in captured.out
+        assert "get event" in captured.err
 
     def test_reads_herds_message_and_error_type(self):
         resp = self._make_response(

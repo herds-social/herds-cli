@@ -195,7 +195,7 @@ def login(ctx, email, password, show_tokens, client_type):
                         OutputFormatter.print_info(f"  {key}: {value}")
 
         # Output formatted response
-        if output_format != "table":  # table format already printed above
+        if output_format == "json":  # text mode already rendered via print_info above
             output = OutputFormatter.format_output(result, output_format)
             if output:  # Only print if there's content
                 click.echo(output)
@@ -261,7 +261,7 @@ def login_google(ctx):
         OutputFormatter.print_info(f"Session saved as: {session_filename}")
 
         # Output formatted response
-        if output_format != "table":  # table format already printed above
+        if output_format == "json":  # text mode already rendered via print_info above
             output = OutputFormatter.format_output(result, output_format)
             if output:  # Only print if there's content
                 click.echo(output)
@@ -318,7 +318,7 @@ def create_user(ctx, email, password):
             )
 
         # Output formatted response
-        if output_format != "table":  # table format already printed above
+        if output_format == "json":  # text mode already rendered via print_info above
             output = OutputFormatter.format_output(result, output_format)
             if output:  # Only print if there's content
                 click.echo(output)
@@ -415,7 +415,7 @@ def update_password(ctx, email):
         )
 
         # Output formatted response if requested
-        if output_format != "table":
+        if output_format == "json":
             output = OutputFormatter.format_output(result, output_format)
             if output:
                 click.echo(output)
@@ -494,7 +494,7 @@ def change_password(ctx, email):
         )
 
         # Output formatted response if requested
-        if output_format != "table":
+        if output_format == "json":
             output = OutputFormatter.format_output(result, output_format)
             if output:
                 click.echo(output)
@@ -631,7 +631,7 @@ def info(ctx, email):
                 )
 
         # Output formatted response if requested
-        if output_format != "table":
+        if output_format == "json":
             output = OutputFormatter.format_output(result, output_format)
             if output:
                 click.echo("")
@@ -729,7 +729,7 @@ def usage(ctx, email):
             )
 
         # Output formatted response if requested
-        if output_format != "table":
+        if output_format == "json":
             output = OutputFormatter.format_output(result, output_format)
             if output:
                 click.echo("")

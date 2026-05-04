@@ -171,8 +171,8 @@ class TestUploadPollSuccess:
         self, cli_runner, cli_obj, mock_session_manager, tmp_path
     ):
         _create_session(mock_session_manager)
-        cli_obj["format"] = "table"
-        cli_obj["config"].output_format = "table"
+        cli_obj["format"] = "text"
+        cli_obj["config"].output_format = "text"
         path = _create_image_file(tmp_path)
 
         # Sequence: POST upload → 3 GET polls → GET events-by-image.
@@ -208,8 +208,8 @@ class TestUploadPollSuccess:
         """If extraction races to completed before we observe stage 1 done,
         we still print 'Image resized' exactly once before 'Event extracted'."""
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
 
         cli_obj["api_client"].session.request.side_effect = [
@@ -237,8 +237,8 @@ class TestUploadPollSuccess:
         self, cli_runner, cli_obj, mock_session_manager, tmp_path
     ):
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
 
         cli_obj["api_client"].session.request.side_effect = [
@@ -269,8 +269,8 @@ class TestUploadPollSuccess:
     ):
         """Extraction may complete with zero events — that's a warning, not a failure."""
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
 
         cli_obj["api_client"].session.request.side_effect = [
@@ -303,8 +303,8 @@ class TestUploadPollCalendarSuccessAndDefault:
         self, cli_runner, cli_obj, mock_session_manager, tmp_path
     ):
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
 
         added_event = {
@@ -343,8 +343,8 @@ class TestUploadPollCalendarSuccessAndDefault:
         no user setting), the polling output should still tell the user that
         the event wasn't added to any calendar — not stay silent."""
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
 
         # SAMPLE_EVENT has no user_data → server did not attempt an add.
@@ -375,8 +375,8 @@ class TestUploadPollFailures:
         self, cli_runner, cli_obj, mock_session_manager, tmp_path
     ):
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
 
         cli_obj["api_client"].session.request.side_effect = [
@@ -398,8 +398,8 @@ class TestUploadPollFailures:
         self, cli_runner, cli_obj, mock_session_manager, tmp_path
     ):
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
 
         cli_obj["api_client"].session.request.side_effect = [
@@ -419,8 +419,8 @@ class TestUploadPollFailures:
         self, cli_runner, cli_obj, mock_session_manager, tmp_path
     ):
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
 
         cli_obj["api_client"].session.request.side_effect = [
@@ -452,8 +452,8 @@ class TestUploadPollFailures:
     ):
         """When the deadline elapses, we exit non-zero with the last-seen status."""
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
 
         cli_obj["api_client"].session.request.side_effect = [
@@ -480,8 +480,8 @@ class TestUploadPollFailures:
     ):
         """If the upload response lacks image_id we can't poll — fail loudly."""
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
 
         cli_obj["api_client"].session.request.return_value = _make_response(
@@ -502,8 +502,8 @@ class TestUploadPollFailures:
         """A non-200 from the poll endpoint should surface as an upload failure
         (the surrounding try/except in upload() catches it)."""
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
 
         cli_obj["api_client"].session.request.side_effect = [
@@ -528,8 +528,8 @@ class TestUploadAddToCalendarFlag:
 
     def _run_upload(self, cli_runner, cli_obj, mock_session_manager, tmp_path, *flag_args):
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
         cli_obj["api_client"].session.request.return_value = _make_response(
             json_data=UPLOAD_RESPONSE
@@ -583,8 +583,8 @@ class TestUploadDefaultBehavior:
         self, cli_runner, cli_obj, mock_session_manager, tmp_path
     ):
         _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         path = _create_image_file(tmp_path)
 
         cli_obj["api_client"].session.request.return_value = _make_response(
@@ -727,8 +727,8 @@ class TestUploadAuthFailure:
         Pins that the recursive _make_request retry doesn't interfere with
         the polling loop in cmd_image."""
         self._create_session_with_refresh(mock_session_manager)
-        cli_obj["config"].output_format = "table"
-        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
         flyer = _create_image_file(tmp_path)
 
         unauthorized = _make_response(status_code=401, json_data={"detail": "expired"})

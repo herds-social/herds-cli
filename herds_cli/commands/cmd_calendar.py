@@ -35,8 +35,10 @@ def _prompt_for_calendar(
     if present in the list, else the primary calendar, else the only calendar
     when the list has one entry, else no default.
 
-    All list and prompt output goes to stderr (Click's default), keeping
-    stdout clean for `--format json` callers.
+    The numbered list goes to stderr via `OutputFormatter.print_info`, and
+    the `click.prompt` call passes `err=True` to route the prompt itself to
+    stderr too — Click's default is stdout, so this is explicit. Both pieces
+    must stay on stderr so `--format json` callers get clean JSON on stdout.
     """
     current_id = (status or {}).get("calendar_id") if (status or {}).get("connected") else None
     current_idx: Optional[int] = None
@@ -64,6 +66,7 @@ def _prompt_for_calendar(
         type=click.IntRange(1, len(calendars)),
         default=default_idx,
         show_default=default_idx is not None,
+        err=True,
     )
     return calendars[choice - 1]["id"]
 
@@ -163,7 +166,7 @@ def status(ctx: click.Context, email: Optional[str]) -> None:
             "Use 'calendar connect --provider google' or '--provider outlook' to connect."
         )
 
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @calendar.command("list")
@@ -206,7 +209,7 @@ def list_calendars(ctx: click.Context, email: Optional[str]) -> None:
                 "Use 'calendar set-calendar --calendar-id <ID>' to select one."
             )
 
-            APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+            APIResponseHandler.format_and_output(result, cmd.output_format)
             return
 
         # Error path — parse body once, branch on known error types.
@@ -246,8 +249,10 @@ def set_calendar(ctx: click.Context, email: Optional[str], calendar_id: Optional
     """Set which calendar to use for new events.
 
     Run without arguments to pick a calendar interactively. Pass --calendar-id
-    to bypass the picker (required for non-interactive contexts: scripts, CI,
-    pipes, or --format json).
+    to bypass the picker — required when stdin is not a TTY (scripts, CI,
+    piped input). Output format does not affect picker availability: a TTY
+    invocation with --format json still runs the picker (prompts go to
+    stderr; JSON lands on stdout).
 
     Examples:
         herds calendar set-calendar
@@ -259,7 +264,7 @@ def set_calendar(ctx: click.Context, email: Optional[str], calendar_id: Optional
     cmd.load_session_auth(email)
 
     if calendar_id is None:
-        if cmd.output_format == "json" or not _is_interactive():
+        if not _is_interactive():
             OutputFormatter.print_error(
                 "--calendar-id is required when running non-interactively."
             )
@@ -280,7 +285,7 @@ def set_calendar(ctx: click.Context, email: Optional[str], calendar_id: Optional
     OutputFormatter.print_info(f"  Calendar ID:   {result.get('calendar_id', 'N/A')}")
     OutputFormatter.print_info(f"  Calendar Name: {result.get('calendar_name') or 'N/A'}")
 
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 def _fetch_calendars_for_picker(cmd: CommandBase) -> List[Dict[str, Any]]:
@@ -391,7 +396,7 @@ def add_event(ctx: click.Context, event_id: str, email: Optional[str]) -> None:
             OutputFormatter.print_success("Event added to calendar!")
             OutputFormatter.print_info(f"  Provider:          {result.get('provider', 'N/A')}")
             OutputFormatter.print_info(f"  Calendar Event ID: {result.get('calendar_event_id', 'N/A')}")
-            APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+            APIResponseHandler.format_and_output(result, cmd.output_format)
             return
 
         # Handle known error types

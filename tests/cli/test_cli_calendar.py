@@ -63,10 +63,11 @@ CAL_LIST_3 = _calendars_payload(
 
 @pytest.fixture
 def interactive_tty(cli_obj):
-    """Patch _is_interactive()→True and switch the test's output format to
-    'table' so the JSON non-interactive guard doesn't trip."""
-    cli_obj["format"] = "table"
-    cli_obj["config"].output_format = "table"
+    """Patch _is_interactive()→True and use 'text' format so the picker's
+    stdout stays empty (JSON mode would also work — the picker is JSON-safe
+    because prompts go to stderr — but 'text' keeps test assertions simpler)."""
+    cli_obj["format"] = "text"
+    cli_obj["config"].output_format = "text"
     with patch(
         "herds_cli.commands.cmd_calendar._is_interactive",
         create=True,
@@ -77,10 +78,10 @@ def interactive_tty(cli_obj):
 
 @pytest.fixture
 def non_tty(cli_obj):
-    """Patch _is_interactive()→False and switch the test's output format to
-    'table' so the failure clearly comes from TTY detection, not JSON mode."""
-    cli_obj["format"] = "table"
-    cli_obj["config"].output_format = "table"
+    """Patch _is_interactive()→False. Format is 'text' to keep assertions
+    focused on the TTY-driven non-interactive guard."""
+    cli_obj["format"] = "text"
+    cli_obj["config"].output_format = "text"
     with patch(
         "herds_cli.commands.cmd_calendar._is_interactive",
         create=True,
@@ -273,22 +274,40 @@ class TestSetCalendar:
         assert "--calendar-id" in out
         assert "non-interactive" in out.lower()
 
-    def test_format_json_no_flag_errors(
+    def test_format_json_with_picker_on_tty(
         self, cli_runner, cli_obj, mock_session_manager, interactive_tty
     ):
-        """--format json + no flag → exit 1 even on a TTY."""
+        """--format json on a TTY still runs the picker.
+
+        Regression guard for the bug where JSON-as-default short-circuited the
+        picker on every interactive run. Picker prompts go to stderr (Click's
+        default for ``click.prompt``), so JSON on stdout stays clean and the
+        picker still works for users who want machine-parseable output.
+        """
         _save_test_session(mock_session_manager)
         cli_obj["format"] = "json"
         cli_obj["config"].output_format = "json"
-        cli_obj["api_client"].session.request.side_effect = AssertionError(
-            "no requests expected on json non-interactive path"
+
+        list_resp = _make_response(200, CAL_LIST_3)
+        status_resp = _make_response(200, {"connected": False})
+        put_resp = _make_response(200, {
+            "calendar_id": "primary", "calendar_name": "Personal",
+        })
+        _route_responses(cli_obj, {
+            ("GET", "/api/calendar/list"): list_resp,
+            ("GET", "/api/calendar/status"): status_resp,
+            ("PUT", "/api/calendar/settings"): put_resp,
+        })
+
+        result = cli_runner.invoke(
+            cli, ["calendar", "set-calendar"], obj=cli_obj, input="1\n"
         )
 
-        result = cli_runner.invoke(cli, ["calendar", "set-calendar"], obj=cli_obj)
-
-        out = strip_ansi(result.output)
-        assert result.exit_code != 0
-        assert "--calendar-id" in out
+        assert result.exit_code == 0, result.output
+        # The PUT body confirms picker selection #1 → 'primary' was sent.
+        assert _put_bodies(cli_obj) == [{"calendar_id": "primary"}]
+        # JSON of the PUT response landed somewhere in the captured output.
+        assert '"calendar_id"' in result.output
 
     def test_empty_calendar_list_errors(
         self, cli_runner, cli_obj, mock_session_manager, interactive_tty

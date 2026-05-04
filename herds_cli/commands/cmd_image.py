@@ -86,9 +86,9 @@ def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode
     # --poll streams human-readable progress to the console; mixing that with
     # JSON output would corrupt the JSON stream. Combined support can come
     # later (would emit one JSON blob containing image + extracted events).
-    # We only reject when the user *explicitly* asked for JSON — silently
-    # ignoring the config default (output_format="json") keeps `--poll` usable
-    # without forcing every invocation to also pass `--format table`.
+    # We only reject when the user *explicitly* asked for JSON — letting the
+    # config default flow through keeps `--poll` usable without forcing
+    # every invocation to also pass `--format text`.
     format_explicit = ctx.obj.get("_format_explicit", False)
     if poll and output_format == "json" and format_explicit:
         raise click.UsageError(
@@ -131,7 +131,7 @@ def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode
             return
 
         # Output formatted response
-        if output_format != "table":  # table format already printed above
+        if output_format == "json":  # text mode already rendered via print_info above
             output = OutputFormatter.format_output(result, output_format)
             if output:  # Only print if there's content
                 click.echo(output)
@@ -280,7 +280,7 @@ def get(ctx, image_id, email):
     cmd.display_image_summary(cast(ImageV2Response, result))
 
     # Output formatted response
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @image.command()
@@ -343,7 +343,7 @@ def detections(ctx, image_id, email):
         OutputFormatter.print_warning("No detections found for this image")
 
     # Output formatted response
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @image.command("in-progress")
@@ -456,7 +456,7 @@ def in_progress(ctx, email, limit, offset, sort_by, sort_order):
         OutputFormatter.print_warning("No images currently in progress")
 
     # Output formatted response
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @image.command()
@@ -491,7 +491,7 @@ def delete(ctx, image_id, email, yes):
     OutputFormatter.print_success(f"Successfully deleted image {image_id}")
 
     # Output formatted response
-    APIResponseHandler.format_and_output(result, cmd.output_format, skip_table=True)
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @image.command()

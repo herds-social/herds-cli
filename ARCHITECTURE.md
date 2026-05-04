@@ -10,7 +10,7 @@ herds_cli/
 ├── api.py              APIClient — wraps requests.Session with auth, debug logging, all endpoints
 ├── sessions.py         SessionManager — JSON session files in ~/.herds/ with 0600 permissions
 ├── images.py           ImageUploader — file validation, MIME detection, multipart upload
-├── output.py           OutputFormatter — JSON or Rich table output, status messages
+├── output.py           OutputFormatter — JSON on stdout (json mode); print_* status messages on stderr (both modes)
 ├── oauth.py            GoogleOAuthFlow — local HTTP server + browser OAuth for Google login
 ├── image_display.py    Terminal image rendering helpers
 ├── types.py            TypedDicts for SessionData, EventV2, etc. (pure leaf, no project imports)
@@ -75,6 +75,7 @@ cli.py                         (top-level wiring — creates all components, pop
 ### Auth Boundary
 
 Two auth modes determined at login time:
+
 - **Web** (`client_type: "web"`) — cookie-based auth via `requests.Session.cookies`
 - **Mobile** (`client_type: "mobile"`) — Bearer token via `Authorization` header
 
@@ -91,6 +92,7 @@ Domain errors use the `HerdsError` hierarchy (`core/exceptions.py`). Helpers in 
 ### Configuration Precedence
 
 Config values are resolved in this order (last wins):
+
 1. Dataclass defaults
 2. `HERDS_*` environment variables
 3. JSON config file (e.g., `herds-cli-config.json`)
