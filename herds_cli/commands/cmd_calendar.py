@@ -23,11 +23,81 @@ def _is_interactive() -> bool:
     return sys.stdin.isatty()
 
 
+def _read_keypress() -> str:
+    """Read one raw keypress from the terminal.
+
+    Wrapped as a module-level function so tests can patch it. `click.getchar`
+    talks to the real tty via termios and bypasses CliRunner's stdin stream,
+    so tests must inject sequences here rather than via CliRunner(input=...).
+    """
+    return click.getchar()
+
+
+def _prompt_choice_index(default: Optional[int], n: int) -> Optional[int]:
+    """Read a 1..n integer from raw keypresses. Returns None if the user pressed ESC.
+
+    Why a custom loop instead of click.prompt:
+      click.prompt -> input() -> readline, which never surfaces ESC as an
+      event — it lands as a literal byte inside the line buffer. To honor
+      "press ESC to cancel" we have to read keypresses one at a time.
+
+    Behavior:
+      digits           accumulate into a buffer (echoed)
+      Enter            accept buffer (or `default` if buffer empty)
+      Backspace        delete one char from buffer
+      ESC              return None (cancel)
+      Ctrl+C / Ctrl+D  raise click.Abort
+      anything else    ignored
+    Out-of-range or non-numeric input re-prompts.
+    """
+    while True:
+        if default is not None:
+            click.echo(f"Calendar [{default}] (ESC to cancel): ", nl=False, err=True)
+        else:
+            click.echo("Calendar (ESC to cancel): ", nl=False, err=True)
+
+        buffer = ""
+        while True:
+            ch = _read_keypress()
+
+            if ch == "\x1b":
+                click.echo("", err=True)
+                return None
+            if ch in ("\x03", "\x04"):
+                click.echo("", err=True)
+                raise click.Abort()
+            if ch in ("\r", "\n"):
+                click.echo("", err=True)
+                if not buffer:
+                    if default is not None:
+                        return default
+                    OutputFormatter.print_error(f"Enter a number between 1 and {n}.")
+                    break
+                try:
+                    val = int(buffer)
+                except ValueError:
+                    OutputFormatter.print_error(f"Enter a number between 1 and {n}.")
+                    break
+                if 1 <= val <= n:
+                    return val
+                OutputFormatter.print_error(f"{val} is out of range. Enter 1 to {n}.")
+                break
+            if ch in ("\x7f", "\b"):
+                if buffer:
+                    buffer = buffer[:-1]
+                    click.echo("\b \b", nl=False, err=True)
+                continue
+            if ch.isdigit():
+                buffer += ch
+                click.echo(ch, nl=False, err=True)
+                continue
+
+
 def _prompt_for_calendar(
     calendars: List[Dict[str, Any]],
     status: Optional[Dict[str, Any]],
-) -> str:
-    """Show a numbered picker over `calendars` and return the chosen calendar's id.
+) -> Optional[str]:
+    """Show a numbered picker and return the chosen calendar's id, or None on ESC.
 
     `status` is the GET /api/calendar/status payload (or None if the read
     failed). Used only to mark the currently-selected calendar with `(current)`
@@ -35,10 +105,8 @@ def _prompt_for_calendar(
     if present in the list, else the primary calendar, else the only calendar
     when the list has one entry, else no default.
 
-    The numbered list goes to stderr via `OutputFormatter.print_info`, and
-    the `click.prompt` call passes `err=True` to route the prompt itself to
-    stderr too — Click's default is stdout, so this is explicit. Both pieces
-    must stay on stderr so `--format json` callers get clean JSON on stdout.
+    The numbered list and the prompt itself both go to stderr — `--format
+    json` callers must get clean JSON on stdout.
     """
     current_id = (status or {}).get("calendar_id") if (status or {}).get("connected") else None
     current_idx: Optional[int] = None
@@ -61,13 +129,9 @@ def _prompt_for_calendar(
     if default_idx is None and len(calendars) == 1:
         default_idx = 1
 
-    choice = click.prompt(
-        "Calendar",
-        type=click.IntRange(1, len(calendars)),
-        default=default_idx,
-        show_default=default_idx is not None,
-        err=True,
-    )
+    choice = _prompt_choice_index(default_idx, len(calendars))
+    if choice is None:
+        return None
     return calendars[choice - 1]["id"]
 
 
@@ -276,6 +340,9 @@ def set_calendar(ctx: click.Context, email: Optional[str], calendar_id: Optional
         calendars = _fetch_calendars_for_picker(cmd)
         status = _fetch_status_for_picker(cmd)
         calendar_id = _prompt_for_calendar(calendars, status)
+        if calendar_id is None:
+            OutputFormatter.print_warning("Cancelled.")
+            sys.exit(0)
 
     url = f"{cmd.api_client.base_url}/api/calendar/settings"
     result = cmd.execute_api_request(
