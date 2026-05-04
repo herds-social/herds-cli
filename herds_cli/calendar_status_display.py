@@ -6,9 +6,12 @@ remediation hint per code. Returns `(severity, message)` tuples instead of
 calling OutputFormatter directly so tests can assert on data rather than
 captured stdout.
 
-The success branch (`Added to {provider} calendar...`) is NOT in this module —
+The success branch (`In {provider} calendar...`) is NOT in this module —
 it stays inline in EventCommandBase.display_event_details. This module only
-covers the no-add path.
+covers the no-add path. The success line is state-oriented (`In ...`) rather
+than action-oriented (`Added to ...`) because callers like `events get` and
+`events update` render it without having performed an add — the line reflects
+"this event currently has a calendar id," not "we just added it."
 """
 
 from typing import Any, Dict, List, Mapping, Optional, Tuple

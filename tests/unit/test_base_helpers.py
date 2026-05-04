@@ -259,7 +259,9 @@ class TestDisplayEventDetails:
         assert "Summer Concert" in out  # sanity: rest of the display ran
         assert "Not added to a calendar" in out
         # The success/failure variants must NOT also appear in this state.
-        assert "Added to" not in out
+        assert "In Google calendar" not in out
+        assert "In Outlook calendar" not in out
+        assert "In Apple calendar" not in out
         assert "Calendar add failed" not in out
 
     def test_empty_user_data_shows_not_added(self, capsys):
@@ -280,7 +282,7 @@ class TestDisplayEventDetails:
         }
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
-        assert "Added to Google calendar" in out
+        assert "In Google calendar" in out
         assert "primary" in out
         assert "g-evt-123" in out
 
@@ -292,7 +294,7 @@ class TestDisplayEventDetails:
         }
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
-        assert "Added to Outlook calendar" in out
+        assert "In Outlook calendar" in out
         assert "o-evt-456" in out
         assert "(calendar:" not in out  # no target → no parenthetical
 
@@ -303,7 +305,7 @@ class TestDisplayEventDetails:
         }
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
-        assert "Added to Apple calendar" in out
+        assert "In Apple calendar" in out
         assert "a-evt-789" in out
 
     def test_add_failure_with_known_code_renders_friendly_message(self, capsys):
@@ -344,7 +346,7 @@ class TestDisplayEventDetails:
         }
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
-        assert "Added to Google calendar" in out
+        assert "In Google calendar" in out
         assert "Calendar add failed" not in out
 
 

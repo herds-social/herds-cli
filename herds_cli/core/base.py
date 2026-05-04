@@ -306,7 +306,7 @@ class EventCommandBase(CommandBase):
                 f" (calendar: {target_calendar})" if target_calendar else ""
             )
             OutputFormatter.print_info(
-                f"Added to {added_provider} calendar{target_suffix} "
+                f"In {added_provider} calendar{target_suffix} "
                 f"— event id: {added_event_id}"
             )
         else:

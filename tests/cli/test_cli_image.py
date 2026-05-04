@@ -332,7 +332,7 @@ class TestUploadPollCalendarSuccessAndDefault:
 
         assert result.exit_code == 0, result.output
         out = strip_ansi(result.output)
-        assert "Added to Google calendar" in out
+        assert "In Google calendar" in out
         assert "primary" in out
         assert "google-evt-001" in out
 

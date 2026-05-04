@@ -8,7 +8,6 @@ spec at docs/superpowers/specs/2026-05-02-set-calendar-prompt-design.md.
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import click
 import pytest
 
 from herds_cli.cli import cli
@@ -99,6 +98,20 @@ def _put_bodies(cli_obj: Any) -> list:
     ]
 
 
+def _feed_keys(*keys: str):
+    """Patch _read_keypress to yield the given key sequence to the picker.
+
+    The picker reads one keypress at a time from `_read_keypress` (a thin
+    wrapper over click.getchar). CliRunner(input=...) can't drive that path
+    because click.getchar bypasses Python-level stdin via termios, so we
+    patch at the wrapper boundary instead.
+    """
+    return patch(
+        "herds_cli.commands.cmd_calendar._read_keypress",
+        side_effect=list(keys),
+    )
+
+
 class TestSetCalendar:
     def test_flag_passed_skips_picker(
         self, cli_runner, cli_obj, mock_session_manager
@@ -164,9 +177,10 @@ class TestSetCalendar:
             ("PUT", "/api/calendar/settings"): put_resp,
         })
 
-        result = cli_runner.invoke(
-            cli, ["calendar", "set-calendar"], obj=cli_obj, input="1\n"
-        )
+        with _feed_keys("1", "\r"):
+            result = cli_runner.invoke(
+                cli, ["calendar", "set-calendar"], obj=cli_obj
+            )
 
         out = strip_ansi(result.output)
         assert result.exit_code == 0, out
@@ -195,9 +209,10 @@ class TestSetCalendar:
             ("PUT", "/api/calendar/settings"): put_resp,
         })
 
-        result = cli_runner.invoke(
-            cli, ["calendar", "set-calendar"], obj=cli_obj, input="\n"
-        )
+        with _feed_keys("\r"):
+            result = cli_runner.invoke(
+                cli, ["calendar", "set-calendar"], obj=cli_obj
+            )
 
         assert result.exit_code == 0, result.output
         assert _put_bodies(cli_obj) == [{"calendar_id": "cal2"}]
@@ -218,9 +233,10 @@ class TestSetCalendar:
             ("PUT", "/api/calendar/settings"): put_resp,
         })
 
-        result = cli_runner.invoke(
-            cli, ["calendar", "set-calendar"], obj=cli_obj, input="\n"
-        )
+        with _feed_keys("\r"):
+            result = cli_runner.invoke(
+                cli, ["calendar", "set-calendar"], obj=cli_obj
+            )
 
         out = strip_ansi(result.output)
         assert result.exit_code == 0, out
@@ -247,9 +263,10 @@ class TestSetCalendar:
             ("PUT", "/api/calendar/settings"): put_resp,
         })
 
-        result = cli_runner.invoke(
-            cli, ["calendar", "set-calendar"], obj=cli_obj, input="2\n"
-        )
+        with _feed_keys("2", "\r"):
+            result = cli_runner.invoke(
+                cli, ["calendar", "set-calendar"], obj=cli_obj
+            )
 
         out = strip_ansi(result.output)
         assert result.exit_code == 0, out
@@ -280,9 +297,9 @@ class TestSetCalendar:
         """--format json on a TTY still runs the picker.
 
         Regression guard for the bug where JSON-as-default short-circuited the
-        picker on every interactive run. Picker prompts go to stderr (Click's
-        default for ``click.prompt``), so JSON on stdout stays clean and the
-        picker still works for users who want machine-parseable output.
+        picker on every interactive run. Picker output (list + prompt) goes to
+        stderr, so JSON on stdout stays clean and the picker still works for
+        users who want machine-parseable output.
         """
         _save_test_session(mock_session_manager)
         cli_obj["format"] = "json"
@@ -299,9 +316,10 @@ class TestSetCalendar:
             ("PUT", "/api/calendar/settings"): put_resp,
         })
 
-        result = cli_runner.invoke(
-            cli, ["calendar", "set-calendar"], obj=cli_obj, input="1\n"
-        )
+        with _feed_keys("1", "\r"):
+            result = cli_runner.invoke(
+                cli, ["calendar", "set-calendar"], obj=cli_obj
+            )
 
         assert result.exit_code == 0, result.output
         # The PUT body confirms picker selection #1 → 'primary' was sent.
@@ -355,9 +373,10 @@ class TestSetCalendar:
             ("PUT", "/api/calendar/settings"): put_resp,
         })
 
-        result = cli_runner.invoke(
-            cli, ["calendar", "set-calendar"], obj=cli_obj, input="1\n"
-        )
+        with _feed_keys("1", "\r"):
+            result = cli_runner.invoke(
+                cli, ["calendar", "set-calendar"], obj=cli_obj
+            )
 
         out = strip_ansi(result.output)
         assert result.exit_code == 0, out
@@ -382,9 +401,10 @@ class TestSetCalendar:
             ("PUT", "/api/calendar/settings"): put_resp,
         })
 
-        result = cli_runner.invoke(
-            cli, ["calendar", "set-calendar"], obj=cli_obj, input="\n"
-        )
+        with _feed_keys("\r"):
+            result = cli_runner.invoke(
+                cli, ["calendar", "set-calendar"], obj=cli_obj
+            )
 
         out = strip_ansi(result.output)
         assert result.exit_code == 0, out
@@ -394,11 +414,10 @@ class TestSetCalendar:
     def test_ctrl_c_at_prompt_aborts(
         self, cli_runner, cli_obj, mock_session_manager, interactive_tty
     ):
-        """Click Abort raised at the prompt → exit 1, no PUT."""
+        """Ctrl+C (\\x03) at the prompt → exit 1, no PUT."""
         _save_test_session(mock_session_manager)
         list_resp = _make_response(200, CAL_LIST_3)
         status_resp = _make_response(200, {"connected": False})
-        # PUT route would raise loudly if reached.
         _route_responses(cli_obj, {
             ("GET", "/api/calendar/list"): list_resp,
             ("GET", "/api/calendar/status"): status_resp,
@@ -407,10 +426,90 @@ class TestSetCalendar:
             ),
         })
 
-        with patch("click.prompt", side_effect=click.exceptions.Abort()):
+        with _feed_keys("\x03"):
             result = cli_runner.invoke(
                 cli, ["calendar", "set-calendar"], obj=cli_obj
             )
 
         assert result.exit_code != 0
+        assert _put_bodies(cli_obj) == []
+
+    def test_esc_at_prompt_cancels_cleanly(
+        self, cli_runner, cli_obj, mock_session_manager, interactive_tty
+    ):
+        """ESC (\\x1b) at the prompt → exit 0, 'Cancelled.' on stderr, no PUT."""
+        _save_test_session(mock_session_manager)
+        list_resp = _make_response(200, CAL_LIST_3)
+        status_resp = _make_response(200, {"connected": False})
+        _route_responses(cli_obj, {
+            ("GET", "/api/calendar/list"): list_resp,
+            ("GET", "/api/calendar/status"): status_resp,
+            ("PUT", "/api/calendar/settings"): AssertionError(
+                "PUT must not happen after cancel"
+            ),
+        })
+
+        with _feed_keys("\x1b"):
+            result = cli_runner.invoke(
+                cli, ["calendar", "set-calendar"], obj=cli_obj
+            )
+
+        out = strip_ansi(result.output)
+        assert result.exit_code == 0, out
+        assert "Cancelled" in out
+        assert _put_bodies(cli_obj) == []
+
+    def test_esc_after_typing_digit_still_cancels(
+        self, cli_runner, cli_obj, mock_session_manager, interactive_tty
+    ):
+        """User types a digit then changes their mind and presses ESC."""
+        _save_test_session(mock_session_manager)
+        list_resp = _make_response(200, CAL_LIST_3)
+        status_resp = _make_response(200, {"connected": False})
+        _route_responses(cli_obj, {
+            ("GET", "/api/calendar/list"): list_resp,
+            ("GET", "/api/calendar/status"): status_resp,
+            ("PUT", "/api/calendar/settings"): AssertionError(
+                "PUT must not happen after cancel"
+            ),
+        })
+
+        with _feed_keys("2", "\x1b"):
+            result = cli_runner.invoke(
+                cli, ["calendar", "set-calendar"], obj=cli_obj
+            )
+
+        assert result.exit_code == 0
+        assert _put_bodies(cli_obj) == []
+
+    def test_esc_in_json_mode_keeps_stdout_empty(
+        self, cli_runner, cli_obj, mock_session_manager, interactive_tty
+    ):
+        """ESC in --format json → stderr carries 'Cancelled.', stdout stays clean.
+
+        Preserves the pipe-friendliness invariant: a JSON consumer of stdout
+        gets nothing on cancel rather than a status payload it would have to
+        special-case.
+        """
+        _save_test_session(mock_session_manager)
+        cli_obj["format"] = "json"
+        cli_obj["config"].output_format = "json"
+        list_resp = _make_response(200, CAL_LIST_3)
+        status_resp = _make_response(200, {"connected": False})
+        _route_responses(cli_obj, {
+            ("GET", "/api/calendar/list"): list_resp,
+            ("GET", "/api/calendar/status"): status_resp,
+            ("PUT", "/api/calendar/settings"): AssertionError(
+                "PUT must not happen after cancel"
+            ),
+        })
+
+        with _feed_keys("\x1b"):
+            result = cli_runner.invoke(
+                cli, ["calendar", "set-calendar"], obj=cli_obj
+            )
+
+        assert result.exit_code == 0
+        # No JSON payload was emitted (we silenced stdout on cancel).
+        assert "{" not in (result.stdout or "")
         assert _put_bodies(cli_obj) == []
