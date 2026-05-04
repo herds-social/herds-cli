@@ -35,8 +35,10 @@ def _prompt_for_calendar(
     if present in the list, else the primary calendar, else the only calendar
     when the list has one entry, else no default.
 
-    All list and prompt output goes to stderr (Click's default), keeping
-    stdout clean for `--format json` callers.
+    The numbered list goes to stderr via `OutputFormatter.print_info`, and
+    the `click.prompt` call passes `err=True` to route the prompt itself to
+    stderr too — Click's default is stdout, so this is explicit. Both pieces
+    must stay on stderr so `--format json` callers get clean JSON on stdout.
     """
     current_id = (status or {}).get("calendar_id") if (status or {}).get("connected") else None
     current_idx: Optional[int] = None
@@ -64,6 +66,7 @@ def _prompt_for_calendar(
         type=click.IntRange(1, len(calendars)),
         default=default_idx,
         show_default=default_idx is not None,
+        err=True,
     )
     return calendars[choice - 1]["id"]
 
