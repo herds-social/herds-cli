@@ -13,6 +13,7 @@ from typing import cast
 from rich.status import Status
 
 from herds_cli.api import APIClient
+from herds_cli.calendar_status_display import ReconnectProviderResolver
 from herds_cli.output import OutputFormatter, console
 from herds_cli.core.base import (
     APIResponseHandler,
@@ -242,10 +243,14 @@ def _poll_and_display_event(
 
     OutputFormatter.print_success(f"Extracted {len(events)} event(s)")
     event_cmd = EventCommandBase(ctx)
+    # One resolver per upload — caches /api/calendar/status across events so
+    # multi-event images make at most one extra GET regardless of how many
+    # events end up tagged calendar_needs_reconnect.
+    resolver = ReconnectProviderResolver(api_client)
     for i, event in enumerate(events, 1):
         if len(events) > 1:
             OutputFormatter.print_info(f"--- Event {i} of {len(events)} ---")
-        event_cmd.display_event_details(cast(EventV2, event))
+        event_cmd.display_event_details(cast(EventV2, event), resolver=resolver)
 
 
 @image.command()
