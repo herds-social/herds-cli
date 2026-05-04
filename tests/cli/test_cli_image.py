@@ -293,10 +293,11 @@ class TestUploadPollSuccess:
         assert "No events were extracted" in out
 
 
-class TestUploadPollCalendarStatus:
-    """When the server auto-adds the event to a calendar (either via the
-    --add-to-calendar flag or the user's auto_add_to_calendar_enabled setting),
-    polling should surface that status as part of the per-event display."""
+class TestUploadPollCalendarSuccessAndDefault:
+    """Coverage for the calendar-status display branches that aren't tied
+    to a specific calendar_add_error code: the auto-add-success branch and
+    the absent-user_data default. Per-error-code coverage lives in
+    TestUploadPollCalendarStatus below."""
 
     def test_event_added_to_google_calendar_displayed(
         self, cli_runner, cli_obj, mock_session_manager, tmp_path
@@ -365,43 +366,6 @@ class TestUploadPollCalendarStatus:
         assert result.exit_code == 0, result.output
         out = strip_ansi(result.output)
         assert "Not added to a calendar" in out
-
-    def test_calendar_add_failure_surfaced(
-        self, cli_runner, cli_obj, mock_session_manager, tmp_path
-    ):
-        """A failed calendar add (e.g. user disabled auto-add server-side)
-        should appear as a warning per event, but not fail the command —
-        the events themselves were still extracted successfully."""
-        _create_session(mock_session_manager)
-        cli_obj["config"].output_format = "text"
-        cli_obj["format"] = "text"
-        path = _create_image_file(tmp_path)
-
-        failed_event = {
-            **SAMPLE_EVENT,
-            "user_data": {"calendar_add_error": "NO_CALENDAR_CONNECTION"},
-        }
-
-        cli_obj["api_client"].session.request.side_effect = [
-            _make_response(json_data=UPLOAD_RESPONSE),
-            _poll_response(
-                resize="completed",
-                thumbnail="completed",
-                extraction="completed",
-            ),
-            _make_response(json_data=[failed_event]),
-        ]
-
-        with patch("herds_cli.commands.cmd_image.time.sleep"):
-            result = cli_runner.invoke(
-                cli, ["image", "upload", str(path), "--poll"], obj=cli_obj
-            )
-
-        # Extraction succeeded → exit 0, even though calendar add failed.
-        assert result.exit_code == 0, result.output
-        out = strip_ansi(result.output)
-        assert "Calendar add failed" in out
-        assert "NO_CALENDAR_CONNECTION" in out
 
 
 class TestUploadPollFailures:
@@ -800,3 +764,196 @@ class TestUploadAuthFailure:
         assert "Summer Concert" in out  # rendered from SAMPLE_EVENT
         # Sanity: 5 calls total — original 401, refresh, retried upload, poll, events.
         assert mock_api_client.session.request.call_count == 5
+
+
+class TestUploadPollCalendarStatus:
+    """End-to-end checks for the calendar_add_error display branch in the
+    upload --poll flow. Each test plants a calendar_add_error code in the
+    by-image events response and asserts the rendered output."""
+
+    def _event_with_error(self, code):
+        """Clone SAMPLE_EVENT and stamp a calendar_add_error code into user_data."""
+        return {**SAMPLE_EVENT, "user_data": {"calendar_add_error": code}}
+
+    def _setup_poll_responses(self, cli_obj, events_response, *extra_responses):
+        """Wire up upload → one-shot poll → events response, with optional
+        trailing responses (e.g. /api/calendar/status for reconnect tests)."""
+        responses = [
+            _make_response(json_data=UPLOAD_RESPONSE),
+            _poll_response(
+                resize="completed",
+                thumbnail="completed",
+                extraction="completed",
+            ),
+            _make_response(json_data=events_response),
+        ]
+        responses.extend(extra_responses)
+        cli_obj["api_client"].session.request.side_effect = responses
+
+    def _run_upload(self, cli_runner, cli_obj, tmp_path):
+        path = _create_image_file(tmp_path)
+        with patch("herds_cli.commands.cmd_image.time.sleep"):
+            return cli_runner.invoke(
+                cli, ["image", "upload", str(path), "--poll"], obj=cli_obj
+            )
+
+    def test_auto_add_disabled_renders_settings_hint(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        _create_session(mock_session_manager)
+        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "table"
+        self._setup_poll_responses(
+            cli_obj, [self._event_with_error("auto_add_disabled")]
+        )
+
+        result = self._run_upload(cli_runner, cli_obj, tmp_path)
+
+        assert result.exit_code == 0, result.output
+        out = strip_ansi(result.output)
+        assert "auto-add is disabled in your settings" in out
+        assert "herds user-settings update --auto-add-to-calendar=True" in out
+
+    def test_no_calendar_connection_renders_connect_hint(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        _create_session(mock_session_manager)
+        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "table"
+        self._setup_poll_responses(
+            cli_obj, [self._event_with_error("no_calendar_connection")]
+        )
+
+        result = self._run_upload(cli_runner, cli_obj, tmp_path)
+
+        assert result.exit_code == 0, result.output
+        out = strip_ansi(result.output)
+        assert "no calendar provider connected" in out
+        assert "herds calendar connect --provider google" in out
+
+    def test_calendar_provider_error_renders_status_hint(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        _create_session(mock_session_manager)
+        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "table"
+        self._setup_poll_responses(
+            cli_obj, [self._event_with_error("calendar_provider_error")]
+        )
+
+        result = self._run_upload(cli_runner, cli_obj, tmp_path)
+
+        assert result.exit_code == 0, result.output
+        out = strip_ansi(result.output)
+        assert "your calendar provider rejected the event" in out
+        assert "herds calendar status" in out
+
+    def test_calendar_add_exception_renders_status_hint(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        _create_session(mock_session_manager)
+        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "table"
+        self._setup_poll_responses(
+            cli_obj, [self._event_with_error("calendar_add_exception")]
+        )
+
+        result = self._run_upload(cli_runner, cli_obj, tmp_path)
+
+        assert result.exit_code == 0, result.output
+        out = strip_ansi(result.output)
+        assert "unexpected error occurred during auto-add" in out
+        assert "herds calendar status" in out
+
+    def test_needs_reconnect_fetches_provider_and_renders_specific_hint(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        """When the events response includes calendar_needs_reconnect, the
+        CLI follows up with one GET /api/calendar/status to learn the
+        provider and bakes the result into the reconnect hint."""
+        _create_session(mock_session_manager)
+        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "table"
+        status_response = _make_response(
+            json_data={"connected": True, "provider": "google"}
+        )
+        self._setup_poll_responses(
+            cli_obj,
+            [self._event_with_error("calendar_needs_reconnect")],
+            status_response,
+        )
+
+        result = self._run_upload(cli_runner, cli_obj, tmp_path)
+
+        assert result.exit_code == 0, result.output
+        out = strip_ansi(result.output)
+        assert "expired" in out
+        assert "herds calendar connect --provider google" in out
+        assert "<google|outlook>" not in out  # placeholder must not leak
+
+    def test_needs_reconnect_falls_back_when_status_call_fails(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        """A 5xx on /api/calendar/status must not crash the upload — we still
+        print the reconnect message with the placeholder hint."""
+        _create_session(mock_session_manager)
+        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "table"
+        status_response = _make_response(status_code=500)
+        self._setup_poll_responses(
+            cli_obj,
+            [self._event_with_error("calendar_needs_reconnect")],
+            status_response,
+        )
+
+        result = self._run_upload(cli_runner, cli_obj, tmp_path)
+
+        assert result.exit_code == 0, result.output
+        out = strip_ansi(result.output)
+        assert "expired" in out
+        assert "<google|outlook>" in out  # placeholder shows up on fallback
+
+    def test_status_lookup_skipped_when_no_event_needs_reconnect(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        """When no event carries calendar_needs_reconnect, the resolver is
+        constructed but never consulted — so /api/calendar/status is not
+        called. We assert by exact request count: 1 upload + 1 poll + 1 events
+        = 3 calls, with no fourth."""
+        _create_session(mock_session_manager)
+        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "table"
+        self._setup_poll_responses(
+            cli_obj, [self._event_with_error("auto_add_disabled")]
+        )
+
+        result = self._run_upload(cli_runner, cli_obj, tmp_path)
+
+        assert result.exit_code == 0, result.output
+        assert cli_obj["api_client"].session.request.call_count == 3
+
+    def test_status_lookup_runs_once_for_multi_event_reconnect(
+        self, cli_runner, cli_obj, mock_session_manager, tmp_path
+    ):
+        """Two events both flagged calendar_needs_reconnect must trigger
+        exactly one /api/calendar/status call thanks to resolver caching.
+        Total: 1 upload + 1 poll + 1 events + 1 status = 4 calls."""
+        _create_session(mock_session_manager)
+        cli_obj["format"] = "table"
+        cli_obj["config"].output_format = "table"
+        events = [
+            {**SAMPLE_EVENT, "user_data": {"calendar_add_error": "calendar_needs_reconnect"}},
+            {**SECOND_EVENT, "user_data": {"calendar_add_error": "calendar_needs_reconnect"}},
+        ]
+        status_response = _make_response(
+            json_data={"connected": True, "provider": "outlook"}
+        )
+        self._setup_poll_responses(cli_obj, events, status_response)
+
+        result = self._run_upload(cli_runner, cli_obj, tmp_path)
+
+        assert result.exit_code == 0, result.output
+        assert cli_obj["api_client"].session.request.call_count == 4
+        out = strip_ansi(result.output)
+        # Both events get the same resolved provider in their reconnect hints.
+        assert out.count("herds calendar connect --provider outlook") == 2

@@ -306,17 +306,31 @@ class TestDisplayEventDetails:
         assert "Added to Apple calendar" in out
         assert "a-evt-789" in out
 
-    def test_add_failure_shows_error_code(self, capsys):
-        """When the auto-add was attempted but failed, surface the error code
-        as a warning so the user knows *why* the event isn't in their calendar."""
+    def test_add_failure_with_known_code_renders_friendly_message(self, capsys):
+        """Known calendar_add_error codes get a translated message + remediation
+        hint sourced from herds_cli.calendar_status_display. The raw enum string
+        no longer appears in the output for known codes."""
         event = {
             **self.BASE_EVENT,
-            "user_data": {"calendar_add_error": "NO_CALENDAR_CONNECTION"},
+            "user_data": {"calendar_add_error": "no_calendar_connection"},
         }
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
-        assert "Calendar add failed" in out
-        assert "NO_CALENDAR_CONNECTION" in out
+        assert "Not added to calendar: no calendar provider connected" in out
+        assert "herds calendar connect --provider google" in out
+        # The literal "Calendar add failed" wording is gone for known codes.
+        assert "Calendar add failed" not in out
+
+    def test_add_failure_with_unknown_code_falls_back_to_raw(self, capsys):
+        """Defensive fallback: a code we haven't taught the CLI about is
+        surfaced verbatim so the user isn't lied to about the cause."""
+        event = {
+            **self.BASE_EVENT,
+            "user_data": {"calendar_add_error": "calendar_quota_exhausted"},
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "calendar_quota_exhausted" in out
 
     def test_success_takes_precedence_over_error(self, capsys):
         """Defensive: if both a success ID and an error are somehow set,

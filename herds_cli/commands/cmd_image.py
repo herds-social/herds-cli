@@ -13,6 +13,7 @@ from typing import cast
 from rich.status import Status
 
 from herds_cli.api import APIClient
+from herds_cli.calendar_status_display import ReconnectProviderResolver
 from herds_cli.output import OutputFormatter, console
 from herds_cli.core.base import (
     APIResponseHandler,
@@ -85,9 +86,9 @@ def upload(ctx, file_path, email, mock, endpoint, alg_version, ocr_text, barcode
     # --poll streams human-readable progress to the console; mixing that with
     # JSON output would corrupt the JSON stream. Combined support can come
     # later (would emit one JSON blob containing image + extracted events).
-    # We only reject when the user *explicitly* asked for JSON — silently
-    # ignoring the config default (output_format="json") keeps `--poll` usable
-    # without forcing every invocation to also pass `--format table`.
+    # We only reject when the user *explicitly* asked for JSON — letting the
+    # config default flow through keeps `--poll` usable without forcing
+    # every invocation to also pass `--format text`.
     format_explicit = ctx.obj.get("_format_explicit", False)
     if poll and output_format == "json" and format_explicit:
         raise click.UsageError(
@@ -242,10 +243,14 @@ def _poll_and_display_event(
 
     OutputFormatter.print_success(f"Extracted {len(events)} event(s)")
     event_cmd = EventCommandBase(ctx)
+    # One resolver per upload — caches /api/calendar/status across events so
+    # multi-event images make at most one extra GET regardless of how many
+    # events end up tagged calendar_needs_reconnect.
+    resolver = ReconnectProviderResolver(api_client)
     for i, event in enumerate(events, 1):
         if len(events) > 1:
             OutputFormatter.print_info(f"--- Event {i} of {len(events)} ---")
-        event_cmd.display_event_details(cast(EventV2, event))
+        event_cmd.display_event_details(cast(EventV2, event), resolver=resolver)
 
 
 @image.command()

@@ -11,6 +11,10 @@ import click
 import requests
 
 from herds_cli.api import APIClient
+from herds_cli.calendar_status_display import (
+    ReconnectProviderResolver,
+    render_calendar_status,
+)
 from herds_cli.core.config import Config
 from herds_cli.types import EventV2, ImageV2Response, SessionData
 from herds_cli.core.exceptions import (
@@ -222,7 +226,12 @@ class APIResponseHandler:
 class EventCommandBase(CommandBase):
     """Base class for event-related commands with common event display logic."""
 
-    def display_event_details(self, event_data: EventV2) -> None:
+    def display_event_details(
+        self,
+        event_data: EventV2,
+        *,
+        resolver: Optional[ReconnectProviderResolver] = None,
+    ) -> None:
         """Extract and display event information consistently."""
         title = event_data.get("title", "Untitled")
         category = event_data.get("category_level_1", "Unknown category")
@@ -273,19 +282,15 @@ class EventCommandBase(CommandBase):
         if description:
             OutputFormatter.print_info(f"Description: {description}")
 
-        # Display calendar add status. Data-driven: the server populates these
-        # fields whenever it attempts an auto-add (either via the per-upload
-        # add_to_calendar flag or the user's auto_add_to_calendar_enabled
-        # setting), so we don't gate display on any CLI flag — if the data
-        # is there, we show it.
+        # Display calendar add status. Success branch stays inline; the
+        # no-add branches are owned by calendar_status_display so the
+        # code → message table lives in one place.
         user_data = event_data.get("user_data", {})
         google_id = user_data.get("google_calendar_id")
         outlook_id = user_data.get("outlook_calendar_id")
         apple_id = user_data.get("apple_calendar_id")
         target_calendar = user_data.get("calendar_id")
-        calendar_error = user_data.get("calendar_add_error")
 
-        # Pick the populated provider (in practice only one is set per event).
         provider_id_pairs = [
             ("Google", google_id),
             ("Outlook", outlook_id),
@@ -304,15 +309,14 @@ class EventCommandBase(CommandBase):
                 f"Added to {added_provider} calendar{target_suffix} "
                 f"— event id: {added_event_id}"
             )
-        elif calendar_error:
-            OutputFormatter.print_warning(f"Calendar add failed: {calendar_error}")
         else:
-            # Always show *something* about calendar status — silence here
-            # would leave the user wondering whether the add was attempted.
-            # The data alone can't tell us *why* (no per-upload flag vs. the
-            # user setting being off vs. no provider connected), so the
-            # message stays neutral.
-            OutputFormatter.print_info("Not added to a calendar")
+            for severity, message in render_calendar_status(
+                user_data, resolver=resolver
+            ):
+                if severity == "warning":
+                    OutputFormatter.print_warning(message)
+                else:
+                    OutputFormatter.print_info(message)
 
 
 class ImageCommandBase(CommandBase):
