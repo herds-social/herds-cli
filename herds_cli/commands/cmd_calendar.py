@@ -246,8 +246,10 @@ def set_calendar(ctx: click.Context, email: Optional[str], calendar_id: Optional
     """Set which calendar to use for new events.
 
     Run without arguments to pick a calendar interactively. Pass --calendar-id
-    to bypass the picker (required for non-interactive contexts: scripts, CI,
-    pipes, or --format json).
+    to bypass the picker — required when stdin is not a TTY (scripts, CI,
+    piped input). Output format does not affect picker availability: a TTY
+    invocation with --format json still runs the picker (prompts go to
+    stderr; JSON lands on stdout).
 
     Examples:
         herds calendar set-calendar
