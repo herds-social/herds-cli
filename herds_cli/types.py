@@ -140,17 +140,17 @@ class EventUserData(TypedDict, total=False):
     server's auto-add flow (gated by the user's auto_add_to_calendar_enabled
     setting and/or the per-upload add_to_calendar flag).
 
-    - {provider}_calendar_id: the event's ID *inside* the user's calendar
+    - {provider}_calendar_event_id: the event's ID assigned by the provider
       (proves the add succeeded for that provider).
     - calendar_id: the *target* calendar (e.g. "primary") the event went into.
     - calendar_add_error: error code if the auto-add was attempted but failed
       (e.g. AUTO_ADD_DISABLED, NO_CALENDAR_CONNECTION). Mutually exclusive
-      with the *_calendar_id fields in practice.
+      with the *_calendar_event_id fields in practice.
     """
 
-    apple_calendar_id: str
-    google_calendar_id: str
-    outlook_calendar_id: str
+    apple_calendar_event_id: str
+    google_calendar_event_id: str
+    outlook_calendar_event_id: str
     calendar_id: str
     calendar_add_error: str
 
@@ -304,9 +304,9 @@ class EventUserDataResponse(TypedDict, total=False):
 
     event_id: str
     user_id: str
-    apple_calendar_id: Optional[str]
-    google_calendar_id: Optional[str]
-    outlook_calendar_id: Optional[str]
+    apple_calendar_event_id: Optional[str]
+    google_calendar_event_id: Optional[str]
+    outlook_calendar_event_id: Optional[str]
     updated_at: str
     created_at: str
 

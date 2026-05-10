@@ -286,9 +286,9 @@ class EventCommandBase(CommandBase):
         # no-add branches are owned by calendar_status_display so the
         # code → message table lives in one place.
         user_data = event_data.get("user_data", {})
-        google_id = user_data.get("google_calendar_id")
-        outlook_id = user_data.get("outlook_calendar_id")
-        apple_id = user_data.get("apple_calendar_id")
+        google_id = user_data.get("google_calendar_event_id")
+        outlook_id = user_data.get("outlook_calendar_event_id")
+        apple_id = user_data.get("apple_calendar_event_id")
         target_calendar = user_data.get("calendar_id")
 
         provider_id_pairs = [

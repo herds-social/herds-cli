@@ -255,9 +255,9 @@ def get_events_by_image_id(ctx: click.Context, image_id: str, email: Optional[st
 @click.option("--website", help="Event website or registration URL")
 @click.option("--category-level-1", help="Event category")
 @click.option("--age-demographic", help="Event age demographic")
-@click.option("--apple-calendar-id", help="Apple Calendar event ID")
-@click.option("--google-calendar-id", help="Google Calendar event ID")
-@click.option("--outlook-calendar-id", help="Outlook Calendar event ID")
+@click.option("--apple-calendar-event-id", help="Apple Calendar event ID")
+@click.option("--google-calendar-event-id", help="Google Calendar event ID")
+@click.option("--outlook-calendar-event-id", help="Outlook Calendar event ID")
 @click.pass_context
 def update_event(
     ctx: click.Context,
@@ -280,9 +280,9 @@ def update_event(
     website: Optional[str],
     category_level_1: Optional[str],
     age_demographic: Optional[str],
-    apple_calendar_id: Optional[str],
-    google_calendar_id: Optional[str],
-    outlook_calendar_id: Optional[str],
+    apple_calendar_event_id: Optional[str],
+    google_calendar_event_id: Optional[str],
+    outlook_calendar_event_id: Optional[str],
 ) -> None:
     """Update an event with new details and calendar integration data.
 
@@ -303,7 +303,7 @@ def update_event(
         herds events update 507f1f77bcf86cd799439011 --is-all-day=true
         herds events update 507f1f77bcf86cd799439011 --is-all-day=false
         herds events update 507f1f77bcf86cd799439011 --city "New York" --organizer "John Doe"
-        herds events update 507f1f77bcf86cd799439011 --apple-calendar-id evt_apple_12345
+        herds events update 507f1f77bcf86cd799439011 --apple-calendar-event-id evt_apple_12345
     """
     session_manager = ctx.obj["session_manager"]
     api_client = ctx.obj["api_client"]
@@ -335,9 +335,9 @@ def update_event(
         website,
         category_level_1,
         age_demographic,
-        apple_calendar_id,
-        google_calendar_id,
-        outlook_calendar_id,
+        apple_calendar_event_id,
+        google_calendar_event_id,
+        outlook_calendar_event_id,
     ]
 
     if not any(field is not None for field in update_fields):
@@ -368,9 +368,9 @@ def update_event(
         website=website,
         category_level_1=category_level_1,
         age_demographic=age_demographic,
-        apple_calendar_id=apple_calendar_id,
-        google_calendar_id=google_calendar_id,
-        outlook_calendar_id=outlook_calendar_id,
+        apple_calendar_event_id=apple_calendar_event_id,
+        google_calendar_event_id=google_calendar_event_id,
+        outlook_calendar_event_id=outlook_calendar_event_id,
     )
 
     # Build URL and execute API request with proper error handling
@@ -407,9 +407,9 @@ def _build_event_update_data(
     website: Optional[str] = None,
     category_level_1: Optional[str] = None,
     age_demographic: Optional[str] = None,
-    apple_calendar_id: Optional[str] = None,
-    google_calendar_id: Optional[str] = None,
-    outlook_calendar_id: Optional[str] = None,
+    apple_calendar_event_id: Optional[str] = None,
+    google_calendar_event_id: Optional[str] = None,
+    outlook_calendar_event_id: Optional[str] = None,
 ) -> dict[str, Any]:
     """Build the update payload from optional fields, omitting None values.
 
@@ -434,9 +434,9 @@ def _build_event_update_data(
         "website": website,
         "category_level_1": category_level_1,
         "age_demographic": age_demographic,
-        "apple_calendar_id": apple_calendar_id,
-        "google_calendar_id": google_calendar_id,
-        "outlook_calendar_id": outlook_calendar_id,
+        "apple_calendar_event_id": apple_calendar_event_id,
+        "google_calendar_event_id": google_calendar_event_id,
+        "outlook_calendar_event_id": outlook_calendar_event_id,
     }
     return {k: v for k, v in fields.items() if v is not None}
 
