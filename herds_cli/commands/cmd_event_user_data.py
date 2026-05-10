@@ -26,28 +26,28 @@ def event_user_data() -> None:
 @click.option("--event-id", required=True, help="Event ID")
 @click.option("--user-id", help="User ID (autodetected from session if not provided)")
 @click.option("--email", help="Email address (autodetect if only one session)")
-@click.option("--apple-calendar-id", help="Apple Calendar event ID")
-@click.option("--google-calendar-id", help="Google Calendar event ID")
-@click.option("--outlook-calendar-id", help="Outlook Calendar event ID")
+@click.option("--apple-calendar-event-id", help="Apple Calendar event ID")
+@click.option("--google-calendar-event-id", help="Google Calendar event ID")
+@click.option("--outlook-calendar-event-id", help="Outlook Calendar event ID")
 @click.pass_context
 def update_event_user_data(
     ctx: click.Context,
     event_id: str,
     user_id: Optional[str],
     email: Optional[str],
-    apple_calendar_id: Optional[str],
-    google_calendar_id: Optional[str],
-    outlook_calendar_id: Optional[str],
+    apple_calendar_event_id: Optional[str],
+    google_calendar_event_id: Optional[str],
+    outlook_calendar_event_id: Optional[str],
 ) -> None:
-    """Update event user data with calendar integration IDs.
+    """Update event user data with provider calendar event IDs.
 
-    Set Apple and/or Google calendar event IDs for an event. Only specified fields are updated;
-    existing field values are preserved if not specified.
+    Set Apple, Google, and/or Outlook provider event IDs for an event. Only specified fields are
+    updated; existing field values are preserved if not specified.
 
     Examples:
-        herds event-user-data update --event-id 507f1f77bcf86cd799439011 --apple-calendar-id evt_apple_12345
-        herds event-user-data update --event-id 507f1f77bcf86cd799439011 --google-calendar-id evt_google_67890
-        herds event-user-data update --event-id 507f1f77bcf86cd799439011 --apple-calendar-id evt_apple_12345 --google-calendar-id evt_google_67890
+        herds event-user-data update --event-id 507f1f77bcf86cd799439011 --apple-calendar-event-id evt_apple_12345
+        herds event-user-data update --event-id 507f1f77bcf86cd799439011 --google-calendar-event-id evt_google_67890
+        herds event-user-data update --event-id 507f1f77bcf86cd799439011 --apple-calendar-event-id evt_apple_12345 --google-calendar-event-id evt_google_67890
     """
     cmd = CommandBase(ctx)
 
@@ -59,10 +59,10 @@ def update_event_user_data(
     # Load session authentication
     cmd.load_session_auth(email)
 
-    # Validate that at least one calendar ID is provided
-    if not apple_calendar_id and not google_calendar_id and not outlook_calendar_id:
+    # Validate that at least one provider event ID is provided
+    if not apple_calendar_event_id and not google_calendar_event_id and not outlook_calendar_event_id:
         OutputFormatter.print_error(
-            "At least one of --apple-calendar-id, --google-calendar-id, or --outlook-calendar-id must be provided"
+            "At least one of --apple-calendar-event-id, --google-calendar-event-id, or --outlook-calendar-event-id must be provided"
         )
         sys.exit(1)
 
@@ -73,29 +73,29 @@ def update_event_user_data(
     data = {"event_id": event_id}
     if user_id is not None:
         data["user_id"] = user_id
-    if apple_calendar_id is not None:
-        data["apple_calendar_id"] = apple_calendar_id
-    if google_calendar_id is not None:
-        data["google_calendar_id"] = google_calendar_id
-    if outlook_calendar_id is not None:
-        data["outlook_calendar_id"] = outlook_calendar_id
+    if apple_calendar_event_id is not None:
+        data["apple_calendar_event_id"] = apple_calendar_event_id
+    if google_calendar_event_id is not None:
+        data["google_calendar_event_id"] = google_calendar_event_id
+    if outlook_calendar_event_id is not None:
+        data["outlook_calendar_event_id"] = outlook_calendar_event_id
 
     result = cmd.execute_api_request(
         "POST", url, "Successfully updated event user data", json=data
     )
     OutputFormatter.print_info(f"Event ID: {result.get('event_id')}")
     OutputFormatter.print_info(f"User ID: {result.get('user_id')}")
-    if apple_calendar_id:
+    if apple_calendar_event_id:
         OutputFormatter.print_info(
-            f"Apple Calendar ID: {result.get('apple_calendar_id')}"
+            f"Apple Calendar event ID: {result.get('apple_calendar_event_id')}"
         )
-    if google_calendar_id:
+    if google_calendar_event_id:
         OutputFormatter.print_info(
-            f"Google Calendar ID: {result.get('google_calendar_id')}"
+            f"Google Calendar event ID: {result.get('google_calendar_event_id')}"
         )
-    if outlook_calendar_id:
+    if outlook_calendar_event_id:
         OutputFormatter.print_info(
-            f"Outlook Calendar ID: {result.get('outlook_calendar_id')}"
+            f"Outlook Calendar event ID: {result.get('outlook_calendar_event_id')}"
         )
     OutputFormatter.print_info(f"Updated: {result.get('updated_at')}")
 
@@ -133,25 +133,25 @@ def get_event_user_data(ctx: click.Context, event_id: str, user_id: Optional[str
     OutputFormatter.print_info(f"Event ID: {result.get('event_id')}")
     OutputFormatter.print_info(f"User ID: {result.get('user_id')}")
 
-    # Display calendar integration fields
-    apple_id = result.get("apple_calendar_id")
-    google_id = result.get("google_calendar_id")
-    outlook_id = result.get("outlook_calendar_id")
+    # Display provider calendar event IDs
+    apple_event_id = result.get("apple_calendar_event_id")
+    google_event_id = result.get("google_calendar_event_id")
+    outlook_event_id = result.get("outlook_calendar_event_id")
 
-    if apple_id:
-        OutputFormatter.print_info(f"Apple Calendar ID: {apple_id}")
+    if apple_event_id:
+        OutputFormatter.print_info(f"Apple Calendar event ID: {apple_event_id}")
     else:
-        OutputFormatter.print_info("Apple Calendar ID: Not set")
+        OutputFormatter.print_info("Apple Calendar event ID: Not set")
 
-    if google_id:
-        OutputFormatter.print_info(f"Google Calendar ID: {google_id}")
+    if google_event_id:
+        OutputFormatter.print_info(f"Google Calendar event ID: {google_event_id}")
     else:
-        OutputFormatter.print_info("Google Calendar ID: Not set")
+        OutputFormatter.print_info("Google Calendar event ID: Not set")
 
-    if outlook_id:
-        OutputFormatter.print_info(f"Outlook Calendar ID: {outlook_id}")
+    if outlook_event_id:
+        OutputFormatter.print_info(f"Outlook Calendar event ID: {outlook_event_id}")
     else:
-        OutputFormatter.print_info("Outlook Calendar ID: Not set")
+        OutputFormatter.print_info("Outlook Calendar event ID: Not set")
 
     OutputFormatter.print_info(f"Created: {result.get('created_at')}")
     OutputFormatter.print_info(f"Updated: {result.get('updated_at')}")

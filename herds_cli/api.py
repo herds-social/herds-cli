@@ -669,12 +669,12 @@ class APIClient:
         email: str,
         event_id: str,
         user_id: Optional[str],
-        apple_calendar_id: Optional[str],
-        google_calendar_id: Optional[str],
-        outlook_calendar_id: Optional[str] = None,
+        apple_calendar_event_id: Optional[str],
+        google_calendar_event_id: Optional[str],
+        outlook_calendar_event_id: Optional[str] = None,
         no_login: bool = False,
     ) -> EventUserDataResponse:
-        """Update event user data with calendar integration IDs."""
+        """Update event user data with provider calendar event IDs."""
         # Load session authentication (skip when no_login=True)
         if not no_login and not self.load_session_auth(email):
             raise Exception(f"No valid session found for {email}. Please login first.")
@@ -689,13 +689,13 @@ class APIClient:
         if user_id is not None:
             data["user_id"] = user_id
 
-        # Only include calendar IDs that are provided
-        if apple_calendar_id is not None:
-            data["apple_calendar_id"] = apple_calendar_id
-        if google_calendar_id is not None:
-            data["google_calendar_id"] = google_calendar_id
-        if outlook_calendar_id is not None:
-            data["outlook_calendar_id"] = outlook_calendar_id
+        # Only include provider event IDs that are provided
+        if apple_calendar_event_id is not None:
+            data["apple_calendar_event_id"] = apple_calendar_event_id
+        if google_calendar_event_id is not None:
+            data["google_calendar_event_id"] = google_calendar_event_id
+        if outlook_calendar_event_id is not None:
+            data["outlook_calendar_event_id"] = outlook_calendar_event_id
 
         response = self._make_request("POST", url, json=data)
 
@@ -805,9 +805,9 @@ class APIClient:
         website: Optional[str] = None,
         category_level_1: Optional[str] = None,
         age_demographic: Optional[str] = None,
-        apple_calendar_id: Optional[str] = None,
-        google_calendar_id: Optional[str] = None,
-        outlook_calendar_id: Optional[str] = None,
+        apple_calendar_event_id: Optional[str] = None,
+        google_calendar_event_id: Optional[str] = None,
+        outlook_calendar_event_id: Optional[str] = None,
     ) -> EventV2:
         """Update an event with new details and calendar integration data.
 
@@ -868,12 +868,12 @@ class APIClient:
             data["age_demographic"] = age_demographic
 
         # Calendar integration fields
-        if apple_calendar_id is not None:
-            data["apple_calendar_id"] = apple_calendar_id
-        if google_calendar_id is not None:
-            data["google_calendar_id"] = google_calendar_id
-        if outlook_calendar_id is not None:
-            data["outlook_calendar_id"] = outlook_calendar_id
+        if apple_calendar_event_id is not None:
+            data["apple_calendar_event_id"] = apple_calendar_event_id
+        if google_calendar_event_id is not None:
+            data["google_calendar_event_id"] = google_calendar_event_id
+        if outlook_calendar_event_id is not None:
+            data["outlook_calendar_event_id"] = outlook_calendar_event_id
 
         response = self._make_request("PUT", url, json=data)
 

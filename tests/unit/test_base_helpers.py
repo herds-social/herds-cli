@@ -223,7 +223,7 @@ class TestDisplayEventsSummary:
 class TestDisplayEventDetails:
     """Unit tests for EventCommandBase.display_event_details, focused on
     the calendar add status block. Calendar status is *data-driven*:
-    if the server populated `user_data.{provider}_calendar_id` (success)
+    if the server populated `user_data.{provider}_calendar_event_id` (success)
     or `user_data.calendar_add_error` (failure), we surface it — regardless
     of whether the CLI passed --add-to-calendar, since the server's per-user
     auto_add_to_calendar_enabled setting can trigger an add independently."""
@@ -276,7 +276,7 @@ class TestDisplayEventDetails:
         event = {
             **self.BASE_EVENT,
             "user_data": {
-                "google_calendar_id": "g-evt-123",
+                "google_calendar_event_id": "g-evt-123",
                 "calendar_id": "primary",
             },
         }
@@ -290,7 +290,7 @@ class TestDisplayEventDetails:
         """Outlook add without a target calendar id: omit the parenthetical."""
         event = {
             **self.BASE_EVENT,
-            "user_data": {"outlook_calendar_id": "o-evt-456"},
+            "user_data": {"outlook_calendar_event_id": "o-evt-456"},
         }
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
@@ -301,7 +301,7 @@ class TestDisplayEventDetails:
     def test_apple_add_success(self, capsys):
         event = {
             **self.BASE_EVENT,
-            "user_data": {"apple_calendar_id": "a-evt-789"},
+            "user_data": {"apple_calendar_event_id": "a-evt-789"},
         }
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
@@ -340,7 +340,7 @@ class TestDisplayEventDetails:
         event = {
             **self.BASE_EVENT,
             "user_data": {
-                "google_calendar_id": "g-evt-1",
+                "google_calendar_event_id": "g-evt-1",
                 "calendar_add_error": "STALE_ERROR",
             },
         }

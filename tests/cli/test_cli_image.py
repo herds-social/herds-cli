@@ -310,7 +310,7 @@ class TestUploadPollCalendarSuccessAndDefault:
         added_event = {
             **SAMPLE_EVENT,
             "user_data": {
-                "google_calendar_id": "google-evt-001",
+                "google_calendar_event_id": "google-evt-001",
                 "calendar_id": "primary",
             },
         }

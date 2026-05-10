@@ -81,9 +81,9 @@ class TestBuildEventUpdateData:
             website="https://example.com",
             category_level_1="Music",
             age_demographic="Adults",
-            apple_calendar_id="apple-1",
-            google_calendar_id="google-1",
-            outlook_calendar_id="outlook-1",
+            apple_calendar_event_id="apple-1",
+            google_calendar_event_id="google-1",
+            outlook_calendar_event_id="outlook-1",
         )
         assert len(result) == 20
 
@@ -92,16 +92,16 @@ class TestBuildEventUpdateData:
         with pytest.raises(TypeError):
             _build_event_update_data("Jazz Night")  # type: ignore[misc]
 
-    def test_calendar_ids(self):
+    def test_calendar_event_ids(self):
         result = _build_event_update_data(
-            apple_calendar_id="a1",
-            google_calendar_id="g1",
-            outlook_calendar_id="o1",
+            apple_calendar_event_id="a1",
+            google_calendar_event_id="g1",
+            outlook_calendar_event_id="o1",
         )
         assert result == {
-            "apple_calendar_id": "a1",
-            "google_calendar_id": "g1",
-            "outlook_calendar_id": "o1",
+            "apple_calendar_event_id": "a1",
+            "google_calendar_event_id": "g1",
+            "outlook_calendar_event_id": "o1",
         }
 
 
