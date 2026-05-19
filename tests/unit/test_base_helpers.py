@@ -219,6 +219,24 @@ class TestDisplayEventsSummary:
         captured = capsys.readouterr()
         assert "Minimal Event" in captured.err
 
+    def test_renders_parent_title_subline(self, capsys):
+        events = [{
+            "title": "Bilingual Worship",
+            "parent_title": "Christmas Eve at Weddington",
+            "date_info": {"raw": {"date": "2026-12-24"}},
+        }]
+        display_events_summary(events)
+        out = capsys.readouterr().err
+        assert "Bilingual Worship" in out
+        assert "Parent: Christmas Eve at Weddington" in out
+
+    def test_omits_parent_subline_when_absent(self, capsys):
+        events = [{"title": "Solo Event", "date_info": {"raw": {"date": "2026-12-24"}}}]
+        display_events_summary(events)
+        out = capsys.readouterr().err
+        assert "Solo Event" in out
+        assert "Parent:" not in out
+
 
 class TestDisplayEventDetails:
     """Unit tests for EventCommandBase.display_event_details, focused on
@@ -348,6 +366,22 @@ class TestDisplayEventDetails:
         out = capsys.readouterr().err
         assert "In Google calendar" in out
         assert "Calendar add failed" not in out
+
+    def test_parent_title_rendered_above_title(self, capsys):
+        """When parent_title is present, a 'Parent:' line precedes the 'Title:' line."""
+        event = {**self.BASE_EVENT, "parent_title": "Christmas Eve at Weddington"}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Parent: Christmas Eve at Weddington" in out
+        assert "Title: Summer Concert" in out
+        # Parent must appear before Title in the output.
+        assert out.index("Parent: Christmas Eve") < out.index("Title: Summer Concert")
+
+    def test_parent_title_omitted_when_absent(self, capsys):
+        """No 'Parent:' line is printed when parent_title is missing or None."""
+        self._make_cmd().display_event_details(self.BASE_EVENT)
+        out = capsys.readouterr().err
+        assert "Parent:" not in out
 
 
 class TestAPIResponseHandler:

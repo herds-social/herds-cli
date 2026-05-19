@@ -91,6 +91,35 @@ class TestEventsList:
         assert "Summer Concert" in strip_ansi(result.output)
         assert "2026-07-15" in strip_ansi(result.output)
 
+    def test_list_events_summary_renders_parent_title(self, cli_runner, cli_obj, mock_session_manager):
+        """--summary surfaces parent_title as an indented sub-line below the event row."""
+        _create_session(mock_session_manager)
+        multi_event = {**SAMPLE_EVENT, "parent_title": "Christmas Eve at Weddington"}
+        _mock_json_response(cli_obj["api_client"], [multi_event])
+
+        result = cli_runner.invoke(
+            cli, ["events", "list", "--summary"], obj=cli_obj
+        )
+
+        assert result.exit_code == 0
+        out = strip_ansi(result.output)
+        assert "Summer Concert" in out
+        assert "Parent: Christmas Eve at Weddington" in out
+
+    def test_get_event_shows_parent_title(self, cli_runner, cli_obj, mock_session_manager):
+        """`events get` prints a 'Parent:' row above 'Title:' when parent_title is set."""
+        _create_session(mock_session_manager)
+        multi_event = {**SAMPLE_EVENT, "parent_title": "Christmas Eve at Weddington"}
+        _mock_json_response(cli_obj["api_client"], multi_event)
+
+        result = cli_runner.invoke(cli, ["events", "get", "evt-001"], obj=cli_obj)
+
+        assert result.exit_code == 0
+        out = strip_ansi(result.output)
+        assert "Parent: Christmas Eve at Weddington" in out
+        assert "Title: Summer Concert" in out
+        assert out.index("Parent: Christmas Eve") < out.index("Title: Summer Concert")
+
 
 class TestEventsGet:
     def test_get_event_success(self, cli_runner, cli_obj, mock_session_manager):

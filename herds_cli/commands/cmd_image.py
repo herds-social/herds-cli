@@ -330,6 +330,9 @@ def detections(ctx, image_id, email):
         event_data = detections[0].get("event_data", {})
         if event_data.get("has_event_data"):
             OutputFormatter.print_info("Event Information:")
+            parent_title = event_data.get("parent_title")
+            if parent_title:
+                OutputFormatter.print_info(f"  Parent: {parent_title}")
             OutputFormatter.print_info(f"  Title: {event_data.get('title', 'N/A')}")
             OutputFormatter.print_info(
                 f"  Organizer: {event_data.get('organizer', 'N/A')}"

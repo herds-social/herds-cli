@@ -452,6 +452,7 @@ def _display_concise_summary(events: list[EventV2]) -> None:
         return
 
     for i, event in enumerate(events, 1):
+        parent_title = event.get("parent_title")
         title = event.get("title", "Untitled")
 
         # Extract date/time from v2 nested structure
@@ -487,3 +488,5 @@ def _display_concise_summary(events: list[EventV2]) -> None:
             line += f"  {time_display}"
 
         click.echo(line)
+        if parent_title:
+            click.echo(f"     Parent: {parent_title}")
