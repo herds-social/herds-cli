@@ -233,6 +233,7 @@ class EventCommandBase(CommandBase):
         resolver: Optional[ReconnectProviderResolver] = None,
     ) -> None:
         """Extract and display event information consistently."""
+        parent_title = event_data.get("parent_title")
         title = event_data.get("title", "Untitled")
         category = event_data.get("category_level_1", "Unknown category")
 
@@ -271,6 +272,8 @@ class EventCommandBase(CommandBase):
 
         display_info = f"{display_date}{location_display}{organizer_display}"
 
+        if parent_title:
+            OutputFormatter.print_info(f"Parent: {parent_title}")
         OutputFormatter.print_info(f"Title: {title}")
         event_id = event_data.get("id")
         if event_id:
@@ -450,6 +453,7 @@ def display_events_summary(events: List[EventV2]) -> None:
 
     OutputFormatter.print_info("Events Summary:")
     for i, event in enumerate(events[:5], 1):  # Show first 5
+        parent_title = event.get("parent_title")
         title = event.get("title", "Untitled")
         category = event.get("category_level_1", "Unknown category")
 
@@ -489,6 +493,8 @@ def display_events_summary(events: List[EventV2]) -> None:
         display_info = f"{display_date}{location_display}{organizer_display}"
 
         OutputFormatter.print_info(f"  {i}. {title} - {display_info} ({category})")
+        if parent_title:
+            OutputFormatter.print_info(f"     Parent: {parent_title}")
 
     if len(events) > 5:
         OutputFormatter.print_info(f"  ... and {len(events) - 5} more events")
