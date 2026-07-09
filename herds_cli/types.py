@@ -399,3 +399,64 @@ class PingResponse(TypedDict, total=False):
     supabase_ref: Optional[str]
     mongo_db: Optional[str]
     git_sha: Optional[str]
+
+
+# ---------------------------------------------------------------------------
+# URL submission + generic extractions API
+# ---------------------------------------------------------------------------
+
+ExtractionStatus = Literal["pending", "processing", "completed", "failed"]
+ExtractionSourceType = Literal["url", "image"]
+
+
+class UrlSubmissionResponse(TypedDict):
+    """Response from POST /api/url/submit."""
+
+    status: Literal["success"]
+    message: str
+    event_source_id: str
+
+
+class UrlExtractionDetail(TypedDict):
+    """URL-source detail on GET /api/extractions/{id}."""
+
+    submitted_url: str
+    candidate_link_count: int
+    fetched_link_count: int
+
+
+class ImageExtractionDetail(TypedDict):
+    """Image-source detail on GET /api/extractions/{id}."""
+
+    image_name: str
+    image_media_type: str
+
+
+class ExtractionResponse(TypedDict, total=False):
+    """One extraction job from the generic extractions API."""
+
+    extraction_id: str
+    source_type: ExtractionSourceType
+    extraction_status: ExtractionStatus
+    extraction_error_type: Optional[str]
+    event_count: int
+    url: UrlExtractionDetail
+    image: ImageExtractionDetail
+    created_at: str
+    updated_at: Optional[str]
+    acknowledged_at: Optional[str]
+
+
+class ExtractionListResponse(TypedDict):
+    """Paginated list from GET /api/extractions."""
+
+    extractions: List[ExtractionResponse]
+    total_count: int
+    has_more: bool
+    next_offset: Optional[int]
+
+
+class AcknowledgeResponse(TypedDict):
+    """Response from POST /api/extractions/acknowledge."""
+
+    acknowledged_count: int

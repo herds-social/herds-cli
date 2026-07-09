@@ -23,15 +23,19 @@ from .core.exceptions import APIRequestError, SessionExpiredError
 from .output import OutputFormatter
 from .sessions import SessionManager
 from .types import (
+    AcknowledgeResponse,
     ChangePasswordResponse,
     CreateUserResponse,
     DeleteEventResponse,
     DeleteImageResponse,
     EventUserDataResponse,
     EventV2,
+    ExtractionListResponse,
+    ExtractionResponse,
     LoginResponse,
     SessionData,
     UpdatePasswordResponse,
+    UrlSubmissionResponse,
     UsageResponse,
     UserResponse,
 )
@@ -913,5 +917,123 @@ class APIClient:
 
         if response.status_code == 200:
             return response.content
+        else:
+            self.handle_api_error(response)
+
+    def submit_url(
+        self,
+        email: str,
+        url: str,
+        timezone: str,
+        *,
+        mock_mode: bool = False,
+        add_to_calendar: Optional[bool] = None,
+    ) -> UrlSubmissionResponse:
+        """Submit a URL for event extraction."""
+        if not self.load_session_auth(email):
+            raise Exception(f"No valid session found for {email}. Please login first.")
+
+        endpoint = f"{self.base_url}/api/url/submit"
+        data: Dict[str, Any] = {
+            "url": url,
+            "timezone": timezone,
+            "mock_mode": mock_mode,
+        }
+        if add_to_calendar is not None:
+            data["add_to_calendar"] = add_to_calendar
+
+        response = self._make_request("POST", endpoint, json=data)
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            self.handle_api_error(response)
+
+    def get_extraction(
+        self, email: str, extraction_id: str
+    ) -> ExtractionResponse:
+        """Get one extraction's status by ID."""
+        if not self.load_session_auth(email):
+            raise Exception(f"No valid session found for {email}. Please login first.")
+
+        endpoint = f"{self.base_url}/api/extractions/{extraction_id}"
+        response = self._make_request("GET", endpoint)
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            self.handle_api_error(response)
+
+    def get_extraction_events(
+        self,
+        email: str,
+        extraction_id: str,
+        *,
+        timezone: str = "UTC",
+    ) -> List[EventV2]:
+        """Get events extracted by one extraction job."""
+        if not self.load_session_auth(email):
+            raise Exception(f"No valid session found for {email}. Please login first.")
+
+        endpoint = f"{self.base_url}/api/extractions/{extraction_id}/events"
+        response = self._make_request("GET", endpoint, params={"timezone": timezone})
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            self.handle_api_error(response)
+
+    def list_extractions(
+        self,
+        email: str,
+        *,
+        status: Optional[str] = None,
+        source_type: Optional[str] = None,
+        acknowledged: Optional[bool] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> ExtractionListResponse:
+        """List extraction history with optional filters."""
+        if not self.load_session_auth(email):
+            raise Exception(f"No valid session found for {email}. Please login first.")
+
+        endpoint = f"{self.base_url}/api/extractions"
+        params: Dict[str, Any] = {"limit": limit, "offset": offset}
+        if status is not None:
+            params["status"] = status
+        if source_type is not None:
+            params["source_type"] = source_type
+        if acknowledged is not None:
+            params["acknowledged"] = acknowledged
+
+        response = self._make_request("GET", endpoint, params=params)
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            self.handle_api_error(response)
+
+    def acknowledge_extractions(
+        self,
+        email: str,
+        *,
+        before: Optional[str] = None,
+        extraction_ids: Optional[List[str]] = None,
+    ) -> AcknowledgeResponse:
+        """Acknowledge terminal extractions."""
+        if not self.load_session_auth(email):
+            raise Exception(f"No valid session found for {email}. Please login first.")
+
+        endpoint = f"{self.base_url}/api/extractions/acknowledge"
+        data: Dict[str, Any] = {}
+        if before is not None:
+            data["before"] = before
+        if extraction_ids is not None:
+            data["extraction_ids"] = extraction_ids
+
+        response = self._make_request("POST", endpoint, json=data)
+
+        if response.status_code == 200:
+            return response.json()
         else:
             self.handle_api_error(response)

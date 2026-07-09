@@ -30,6 +30,8 @@ from .commands import (
     user_settings,
     calendar,
     ping,
+    url,
+    extractions,
 )
 
 
@@ -285,6 +287,8 @@ cli.add_command(config)
 cli.add_command(user_settings)
 cli.add_command(calendar)
 cli.add_command(ping)
+cli.add_command(url)
+cli.add_command(extractions)
 
 if __name__ == "__main__":
     cli()

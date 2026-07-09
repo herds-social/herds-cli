@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "herds-cli"
-version = "4.1.0"
+version = "4.2.0"
 description = "Command-line interface for the Herds event platform"
 readme = "README.md"
 license = "Apache-2.0"
