@@ -280,14 +280,18 @@ def list_extractions_cmd(
         f"Retrieving extractions (limit: {limit}, offset: {offset})..."
     )
 
-    result = cmd.api_client.list_extractions(
-        email,
-        status=status,
-        source_type=source_type,
-        acknowledged=acknowledged,
-        limit=limit,
-        offset=offset,
-    )
+    try:
+        result = cmd.api_client.list_extractions(
+            email,
+            status=status,
+            source_type=source_type,
+            acknowledged=acknowledged,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as exc:
+        OutputFormatter.print_error(str(exc))
+        raise HerdsError("failed to list extractions") from exc
 
     items = result.get("extractions", [])
     total_count = result.get("total_count", 0)

@@ -132,6 +132,7 @@ class TestExtractionsList:
 
     def test_empty_list_warning(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
+        cli_obj["config"].output_format = "text"
         cli_obj["format"] = "text"
         cli_obj["api_client"].session.request.return_value = _make_response(
             200,
@@ -142,6 +143,16 @@ class TestExtractionsList:
 
         assert result.exit_code == 0
         assert "No extractions found" in strip_ansi(result.output)
+
+    def test_api_error_exits(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            404, {"detail": "Not found"}
+        )
+
+        result = cli_runner.invoke(cli, ["extractions", "list"], obj=cli_obj)
+
+        assert result.exit_code == 1
 
 
 class TestExtractionsGet:
