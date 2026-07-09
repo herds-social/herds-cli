@@ -64,6 +64,23 @@ def _extraction_response(*, status="processing", **extra):
 
 
 class TestUrlSubmit:
+    def test_submit_api_error_exits(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            400, {"detail": "URL blocked: file:///etc/passwd"}
+        )
+
+        result = cli_runner.invoke(
+            cli,
+            ["url", "submit", "file:///etc/passwd"],
+            obj=cli_obj,
+        )
+
+        assert result.exit_code == 1
+        assert "URL submission failed" in strip_ansi(result.output)
+
     def test_success_prints_event_source_id(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["config"].output_format = "text"

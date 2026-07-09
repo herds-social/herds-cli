@@ -185,4 +185,4 @@ class TestAcknowledgeExtractions:
 
     def test_no_session_raises(self, mock_api_client):
         with pytest.raises(Exception, match="No valid session"):
-            mock_api_client.submit_url("nobody@example.com", "https://x.com", "UTC")
+            mock_api_client.acknowledge_extractions("nobody@example.com")

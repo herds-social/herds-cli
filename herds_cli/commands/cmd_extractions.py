@@ -255,7 +255,7 @@ def parse_before_timestamp(value: str, tz_name: str) -> str:
 @click.option(
     "--limit",
     default=50,
-    type=int,
+    type=click.IntRange(min=1, max=200),
     show_default=True,
     help="Maximum number of extractions to return",
 )
