@@ -7,9 +7,14 @@ A command-line interface for the [Herds](https://herds.events) event platform. U
 ### Homebrew (macOS)
 
 ```bash
-brew tap herds-social/herds-cli-homebrew
+brew tap herds-social/herds-cli-homebrew https://github.com/herds-social/herds-cli-homebrew.git
+brew trust herds-social/herds-cli-homebrew   # first install on Homebrew 4.x+
 brew install herds
 ```
+
+Upgrades: `brew update && brew upgrade herds` after the tap formula is bumped.
+
+For unreleased worktrees, use [source / `uv tool`](#from-source) instead.
 
 ### pip / pipx
 

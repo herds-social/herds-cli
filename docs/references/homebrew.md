@@ -1,71 +1,94 @@
 # Distributing Herds CLI via Homebrew
 
-## Prerequisites
+## Tap repository
 
-- A **public** GitHub repo for the Homebrew tap: `herds-social/herds-cli-homebrew`
-- A GitHub release with the `.tar.gz` source archive (created by the `release-cli.yml` workflow)
+Public tap: [`herds-social/herds-cli-homebrew`](https://github.com/herds-social/herds-cli-homebrew)
 
-## 1. Create the tap repository
+The GitHub repo is named `herds-cli-homebrew` (not `homebrew-herds-cli-homebrew`), so the tap must be added with an explicit URL:
 
-Create a public repo named `herds-cli-homebrew` under the `herds-social` GitHub org.
-
-## 2. Add the formula
-
-Create `Formula/herds.rb` in that repo:
-
-```ruby
-class Herds < Formula
-  include Language::Python::Virtualenv
-
-  desc "CLI for the Herds event platform"
-  homepage "https://github.com/herds-social/herds"
-  url "https://github.com/herds-social/herds/releases/download/cli-v1.0.0/herds_cli-1.0.0.tar.gz"
-  sha256 "REPLACE_WITH_SHA256"
-  license "Apache-2.0"
-
-  depends_on "python@3.11"
-
-  # Add each Python dependency as a resource block.
-  # Generate these with: pip install homebrew-pypi-poet && poet herds-cli
-
-  def install
-    virtualenv_install_with_resources
-  end
-
-  test do
-    assert_match "Herds CLI Tool", shell_output("#{bin}/herds --help")
-  end
-end
+```bash
+brew tap herds-social/herds-cli-homebrew https://github.com/herds-social/herds-cli-homebrew.git
+brew trust herds-social/herds-cli-homebrew   # first install on Homebrew 4.x+
+brew install herds
 ```
 
-Generate the `resource` blocks automatically:
+Upgrades after the formula is bumped:
+
+```bash
+brew update && brew upgrade herds
+```
+
+Source installs via `uv tool` remain the supported path for unreleased worktrees and local development.
+
+## How releases connect to the formula
+
+```
+tag cli-vX.Y.Z on herds-cli main
+    → release-cli.yml builds sdist + wheel
+    → GitHub Release assets
+    → update Formula/herds.rb url + sha256 (+ resources if deps changed)
+    → brew update && brew upgrade herds
+```
+
+CLI releases use tags matching `cli-v*` (for example `cli-v4.2.1`). The workflow attaches `herds_cli-<version>.tar.gz` and a wheel to each GitHub Release.
+
+## Formula layout
+
+`Formula/herds.rb` in the tap repo:
+
+- `url` — GitHub Release **sdist** (`herds_cli-<version>.tar.gz`)
+- `sha256` — from `shasum -a 256 herds_cli-<version>.tar.gz`
+- `depends_on "python@3.11"` — matches `requires-python = ">=3.11"`
+- `resource` blocks — runtime deps from PyPI (click, requests, rich, pytz, tzlocal and their transitive deps). Do **not** list `herds-cli` itself as a resource; it is the formula `url`.
+- `virtualenv_install_with_resources` in `install`
+- `test` — assert stable `--help` output (`Usage:`, `herds`)
+
+Generate or refresh dependency `resource` blocks:
 
 ```bash
 pip install homebrew-pypi-poet
-poet herds-cli
+poet click requests rich pytz tzlocal
 ```
 
-Paste the output into the formula between `license` and `def install`.
+(`poet herds-cli` works only after the package is published to PyPI; until then, generate resources per runtime dependency.)
 
-## 3. Compute the SHA256
+## Per-release checklist
 
-```bash
-shasum -a 256 herds_cli-1.0.0.tar.gz
-```
+1. Bump version in `pyproject.toml`, `herds_cli/__init__.py`, and `uv.lock` on the release branch; merge to `main`.
+2. Tag and push:
 
-Replace `REPLACE_WITH_SHA256` in the formula.
+   ```bash
+   git tag cli-vX.Y.Z
+   git push origin cli-vX.Y.Z
+   ```
 
-## 4. Install
+3. Wait for the **Release CLI** workflow; confirm the GitHub Release has the sdist.
+4. Download the sdist and record SHA256:
 
-```bash
-brew tap herds-social/herds-cli-homebrew
-brew install herds
-herds --help
-```
+   ```bash
+   gh release download cli-vX.Y.Z --repo herds-social/herds-cli --pattern 'herds_cli-*.tar.gz'
+   shasum -a 256 herds_cli-X.Y.Z.tar.gz
+   ```
 
-## 5. Releasing a new version
+5. In `herds-cli-homebrew`, update `Formula/herds.rb`:
+   - `url` → new release sdist URL
+   - `sha256` → value from step 4
+   - `resource` blocks → regenerate if `pyproject.toml` dependencies changed
+6. Push to the tap `main` branch.
+7. Smoke test:
 
-1. Tag: `git tag cli-v1.1.0 && git push origin cli-v1.1.0`
-2. Wait for the `release-cli.yml` workflow to create the GitHub release
-3. Download the `.tar.gz` from the release, compute SHA256
-4. Update `url` and `sha256` in `Formula/herds.rb`, push to the `herds-cli-homebrew` repo
+   ```bash
+   brew update && brew upgrade herds
+   herds --help
+   brew test herds
+   ```
+
+## Troubleshooting
+
+- **`which herds` shows the wrong version** — Homebrew (`/opt/homebrew/bin/herds`) and `uv tool` (`~/.local/bin/herds`) can both install `herds`. Check `which -a herds` and your `PATH` order.
+- **Tap clone 404** — use the full `brew tap … https://github.com/…` URL; shorthand `brew tap herds-social/herds-cli-homebrew` expects a repo named `homebrew-herds-cli-homebrew`.
+- **Untrusted tap** — run `brew trust herds-social/herds-cli-homebrew` before `brew install`.
+
+## Optional automation
+
+A follow-up GitHub Action on `herds-cli` release could open a PR on the tap with updated `url`/`sha256` (for example Homebrew's `bump-formula-pr` pattern or a small workflow with a tap deploy key).
