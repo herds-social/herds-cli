@@ -4,7 +4,7 @@ Guide for manually exercising `herds url` and `herds extractions` (added in **4.
 
 ## Prerequisites
 
-### Use the 4.2.0 build
+### Use a 4.2.0+ build
 
 The global `herds` install may still be 4.1.x and will not have `url` / `extractions`:
 

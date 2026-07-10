@@ -383,12 +383,13 @@ class TestDisplayEventDetails:
         out = capsys.readouterr().err
         assert "Parent:" not in out
 
-    def test_null_raw_date_uses_local_date_and_time(self, capsys):
-        """API may return raw.date=null while local fields are populated."""
+    @pytest.mark.parametrize("raw_date", [None, ""])
+    def test_null_raw_date_uses_local_date_and_time(self, capsys, raw_date):
+        """API may return raw.date null/empty while local fields are populated."""
         event = {
             **self.BASE_EVENT,
             "date_info": {
-                "raw": {"date": None},
+                "raw": {"date": raw_date},
                 "local": {
                     "date_start": "2026-08-01",
                     "time_start": "7:00 PM",

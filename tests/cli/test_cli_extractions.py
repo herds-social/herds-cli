@@ -36,7 +36,7 @@ URL_EXTRACTION = {
     "extraction_status": "completed",
     "event_count": 3,
     "url": {
-        "submitted_url": "https://venue.com/calendar",
+        "submitted_url": "https://venue.com/calendar/[red]",
         "candidate_link_count": 2,
         "fetched_link_count": 2,
     },
@@ -83,7 +83,7 @@ class TestExtractionsList:
         assert result.exit_code == 0
         out = strip_ansi(result.output)
         assert URL_EXTRACTION["extraction_id"] in out
-        assert "https://venue.com/calendar" in out
+        assert "https://venue.com/calendar/[red]" in out
         assert "flyer.jpg" in out
         assert "[unread]" in out
 
