@@ -8,7 +8,7 @@ The GitHub repo is named `herds-cli-homebrew` (not `homebrew-herds-cli-homebrew`
 
 ```bash
 brew tap herds-social/herds-cli-homebrew https://github.com/herds-social/herds-cli-homebrew.git
-brew trust herds-social/herds-cli-homebrew   # first install on Homebrew 4.x+
+brew trust --formula herds-social/herds-cli-homebrew/herds   # required on Homebrew 6.0.0+ (5.2.0+)
 brew install herds
 ```
 
@@ -22,7 +22,7 @@ Source installs via `uv tool` remain the supported path for unreleased worktrees
 
 ## How releases connect to the formula
 
-```
+```text
 tag cli-vX.Y.Z on herds-cli main
     → release-cli.yml builds sdist + wheel
     → GitHub Release assets
@@ -87,7 +87,7 @@ poet click requests rich pytz tzlocal
 
 - **`which herds` shows the wrong version** — Homebrew (`/opt/homebrew/bin/herds`) and `uv tool` (`~/.local/bin/herds`) can both install `herds`. Check `which -a herds` and your `PATH` order.
 - **Tap clone 404** — use the full `brew tap … https://github.com/…` URL; shorthand `brew tap herds-social/herds-cli-homebrew` expects a repo named `homebrew-herds-cli-homebrew`.
-- **Untrusted tap** — run `brew trust herds-social/herds-cli-homebrew` before `brew install`.
+- **Untrusted formula** — run `brew trust --formula herds-social/herds-cli-homebrew/herds` before `brew install` (required on Homebrew 6.0.0+ / 5.2.0+).
 
 ## Optional automation
 
