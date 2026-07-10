@@ -2,13 +2,13 @@
 
 ## Tap repository
 
-Public tap: [`herds-social/herds-cli-homebrew`](https://github.com/herds-social/herds-cli-homebrew)
+Public tap: [`herds-social/herds-cli`](https://github.com/herds-social/homebrew-herds-cli)
 
-The GitHub repo is named `herds-cli-homebrew` (not `homebrew-herds-cli-homebrew`), so the tap must be added with an explicit URL:
+The GitHub repo follows Homebrew's `homebrew-*` naming convention (`homebrew-herds-cli`), so the shorthand tap works:
 
 ```bash
-brew tap herds-social/herds-cli-homebrew https://github.com/herds-social/herds-cli-homebrew.git
-brew trust --formula herds-social/herds-cli-homebrew/herds   # required on Homebrew 6.0.0+ (5.2.0+)
+brew tap herds-social/herds-cli
+brew trust --formula herds-social/herds-cli/herds   # required on Homebrew 6.0.0+ (5.2.0+)
 brew install herds
 ```
 
@@ -70,7 +70,7 @@ poet click requests rich pytz tzlocal
    shasum -a 256 herds_cli-X.Y.Z.tar.gz
    ```
 
-5. In `herds-cli-homebrew`, update `Formula/herds.rb`:
+5. In `homebrew-herds-cli`, update `Formula/herds.rb`:
    - `url` → new release sdist URL
    - `sha256` → value from step 4
    - `resource` blocks → regenerate if `pyproject.toml` dependencies changed
@@ -86,8 +86,7 @@ poet click requests rich pytz tzlocal
 ## Troubleshooting
 
 - **`which herds` shows the wrong version** — Homebrew (`/opt/homebrew/bin/herds`) and `uv tool` (`~/.local/bin/herds`) can both install `herds`. Check `which -a herds` and your `PATH` order.
-- **Tap clone 404** — use the full `brew tap … https://github.com/…` URL; shorthand `brew tap herds-social/herds-cli-homebrew` expects a repo named `homebrew-herds-cli-homebrew`.
-- **Untrusted formula** — run `brew trust --formula herds-social/herds-cli-homebrew/herds` before `brew install` (required on Homebrew 6.0.0+ / 5.2.0+).
+- **Untrusted formula** — run `brew trust --formula herds-social/herds-cli/herds` before `brew install` (required on Homebrew 6.0.0+ / 5.2.0+).
 
 ## Optional automation
 
