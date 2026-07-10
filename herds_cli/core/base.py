@@ -239,14 +239,14 @@ class EventCommandBase(CommandBase):
 
         # Extract date info from v2 nested structure
         date_info = event_data.get("date_info", {})
-        raw_date = date_info.get("raw", {}).get("date", "Unknown date")
+        raw_date = date_info.get("raw", {}).get("date") or "Unknown date"
         local_info = date_info.get("local", {})
-        local_date = local_info.get("date_start", "Unknown date")
-        local_time = local_info.get("time_start", "")
+        local_date = local_info.get("date_start") or "Unknown date"
+        local_time = local_info.get("time_start") or ""
 
         # Format display date
         display_date = raw_date if raw_date != "Unknown date" else local_date
-        if local_time and local_time != "":
+        if local_time:
             display_date += f" at {local_time}"
 
         # Extract location info from v2 nested structure
@@ -459,14 +459,14 @@ def display_events_summary(events: List[EventV2]) -> None:
 
         # Extract date info from v2 nested structure
         date_info = event.get("date_info", {})
-        raw_date = date_info.get("raw", {}).get("date", "Unknown date")
+        raw_date = date_info.get("raw", {}).get("date") or "Unknown date"
         local_info = date_info.get("local", {})
-        local_date = local_info.get("date_start", "Unknown date")
-        local_time = local_info.get("time_start", "")
+        local_date = local_info.get("date_start") or "Unknown date"
+        local_time = local_info.get("time_start") or ""
 
         # Format display date
         display_date = raw_date if raw_date != "Unknown date" else local_date
-        if local_time and local_time != "":
+        if local_time:
             display_date += f" at {local_time}"
 
         # Extract location info from v2 nested structure

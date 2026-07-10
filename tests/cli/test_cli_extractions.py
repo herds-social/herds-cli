@@ -36,7 +36,7 @@ URL_EXTRACTION = {
     "extraction_status": "completed",
     "event_count": 3,
     "url": {
-        "submitted_url": "https://venue.com/calendar",
+        "submitted_url": "https://venue.com/calendar/[red]",
         "candidate_link_count": 2,
         "fetched_link_count": 2,
     },
@@ -66,6 +66,7 @@ SAMPLE_EVENT = {
 class TestExtractionsList:
     def test_renders_url_and_image_rows(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
+        cli_obj["config"].output_format = "text"
         cli_obj["format"] = "text"
         cli_obj["api_client"].session.request.return_value = _make_response(
             200,
@@ -81,10 +82,10 @@ class TestExtractionsList:
 
         assert result.exit_code == 0
         out = strip_ansi(result.output)
-        assert "68a3f1c2" in out
-        assert "https://venue.com/calendar" in out
+        assert URL_EXTRACTION["extraction_id"] in out
+        assert "https://venue.com/calendar/[red]" in out
         assert "flyer.jpg" in out
-        assert " *" in out
+        assert "[unread]" in out
 
     def test_forwards_filters(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
@@ -214,6 +215,33 @@ class TestExtractionsEvents:
 
         assert result.exit_code == 0
         assert "Block Party" in strip_ansi(result.output)
+
+    def test_renders_events_with_null_raw_date(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
+        event = {
+            **SAMPLE_EVENT,
+            "date_info": {
+                "raw": {"date": None},
+                "local": {
+                    "date_start": "2026-08-01",
+                    "time_start": "7:00 PM",
+                },
+            },
+        }
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            200, [event]
+        )
+
+        result = cli_runner.invoke(
+            cli, ["extractions", "events", "ext-1"], obj=cli_obj
+        )
+
+        assert result.exit_code == 0
+        out = strip_ansi(result.output)
+        assert "Block Party" in out
+        assert "2026-08-01 at 7:00 PM" in out
 
     def test_empty_warning_exit_zero(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
