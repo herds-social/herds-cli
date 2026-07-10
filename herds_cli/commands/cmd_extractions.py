@@ -13,6 +13,7 @@ from typing import List, Optional, cast
 from zoneinfo import ZoneInfo
 
 import click
+from rich.markup import escape
 from rich.status import Status
 
 from herds_cli.api import APIClient
@@ -32,10 +33,6 @@ _TERMINAL_STATUSES = frozenset({"completed", "failed"})
 def extractions():
     """Extraction history and status commands."""
     pass
-
-
-def _short_id(extraction_id: str) -> str:
-    return extraction_id[:8] if len(extraction_id) > 8 else extraction_id
 
 
 def _source_label(extraction: ExtractionResponse) -> str:
@@ -68,7 +65,7 @@ def _format_list_row(index: int, extraction: ExtractionResponse) -> str:
     source_label = _source_label(extraction)
     created_at = extraction.get("created_at", "unknown")
     row = (
-        f"  {index}. [{_short_id(extraction_id)}] {source_type:<5} {status:<10} "
+        f"  {index}. [{extraction_id}] {source_type:<5} {status:<10} "
         f"{_event_count_display(extraction):<8} {source_label:<28} {created_at}"
     )
     if status == "failed":
@@ -76,7 +73,7 @@ def _format_list_row(index: int, extraction: ExtractionResponse) -> str:
         if error_type:
             row += f" ({error_type})"
     if _is_unacknowledged_terminal(extraction):
-        row += " *"
+        row += " [unread]"
     return row
 
 
@@ -310,7 +307,7 @@ def list_extractions_cmd(
             )
         OutputFormatter.print_info("Extractions:")
         for i, extraction in enumerate(items, 1):
-            OutputFormatter.print_info(_format_list_row(i, extraction))
+            OutputFormatter.print_info(escape(_format_list_row(i, extraction)))
     else:
         OutputFormatter.print_warning("No extractions found")
 
