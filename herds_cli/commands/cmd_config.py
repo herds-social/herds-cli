@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import NotRequired, Optional, TypedDict
 
+from herds_cli import paths
 from herds_cli.output import OutputFormatter
 from herds_cli.core.config import Config
 
@@ -155,8 +156,9 @@ def config():
 @config.command()
 @click.option(
     "--config-file",
-    help="Path to save configuration file (optional, defaults to ./herds-cli-config.json)",
-    default="./herds-cli-config.json",
+    help="Path to the configuration file (defaults to HERDS_CONFIG_FILE or "
+    "the XDG config path)",
+    default=None,
 )
 @click.pass_context
 def show(ctx, config_file):
@@ -188,6 +190,7 @@ def show(ctx, config_file):
         herds config show
         herds config show --config my-config.json
     """
+    config_file = paths.resolve_config_file(config_file or ctx.obj.get("config_path"))
     # Try to load from config file if it exists, otherwise use current config
     try:
         config_obj = Config.load(config_file)
@@ -242,18 +245,23 @@ def validate(ctx):
 
 
 @config.command()
-@click.argument("config_file", type=click.Path())
+@click.argument("config_file", type=click.Path(), required=False)
 @click.option(
     "--force", "-f", is_flag=True, help="Overwrite existing configuration file"
 )
 @click.pass_context
 def save(ctx, config_file, force):
-    """Save current configuration to a JSON file."""
+    """Save current configuration to a JSON file.
+
+    Writes to the XDG config path (~/.config/herds/config.json) when no path
+    is given.
+    """
     config_obj = ctx.obj.get("config")
     if not config_obj:
         OutputFormatter.print_error("Configuration not loaded")
         sys.exit(1)
 
+    config_file = paths.resolve_config_file(config_file or ctx.obj.get("config_path"))
     path = Path(config_file)
     if path.exists() and not force:
         OutputFormatter.print_error(f"Configuration file already exists: {config_file}")
@@ -296,8 +304,9 @@ def reset():
 @config.command()
 @click.option(
     "--config-file",
-    help="Path to save configuration file (optional, defaults to ./herds-cli-config.json)",
-    default="./herds-cli-config.json",
+    help="Path to save configuration file (defaults to HERDS_CONFIG_FILE or "
+    "the XDG config path)",
+    default=None,
 )
 @click.option(
     "--local",
@@ -373,6 +382,8 @@ def set(ctx, config_file, local, prod, key, value):
     # Handle environment shortcuts (--local and --prod)
     if local or prod:
         value = _resolve_api_url_shortcut(local, prod, key, value)
+
+    config_file = paths.resolve_config_file(config_file or ctx.obj.get("config_path"))
 
     # Load existing configuration from file if it exists, otherwise use current config
     try:

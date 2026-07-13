@@ -8,7 +8,7 @@ Herds CLI is a Python CLI for the [Herds](https://herds.events) event platform. 
 herds_cli/
 ├── cli.py              Entry point — Click root group, context setup, HerdsGroup error handler
 ├── api.py              APIClient — wraps requests.Session with auth, debug logging, all endpoints
-├── sessions.py         SessionManager — JSON session files in ~/.herds/ with 0600 permissions
+├── sessions.py         SessionManager — JSON session files in ~/.local/state/herds/ with 0600 permissions
 ├── images.py           ImageUploader — file validation, MIME detection, multipart upload
 ├── output.py           OutputFormatter — JSON on stdout (json mode); print_* status messages on stderr (both modes)
 ├── oauth.py            GoogleOAuthFlow — local HTTP server + browser OAuth for Google login
@@ -87,7 +87,7 @@ Domain errors use the `HerdsError` hierarchy (`core/exceptions.py`). Helpers in 
 
 ### Session Storage
 
-`SessionManager` persists sessions as JSON files in `~/.herds/` with filename convention `herds_session_{sanitized_email}` (where `@` → `_at_`, `.` → `_`). Files use `0600` permissions.
+`SessionManager` persists sessions as JSON files in the XDG state directory (`$XDG_STATE_HOME/herds/`, default `~/.local/state/herds/`) with filename convention `herds_session_{sanitized_email}` (where `@` → `_at_`, `.` → `_`). Files use `0600` permissions. Override the directory with `HERDS_SESSION_DIR` or the `session_dir` config key. See `herds_cli/paths.py` for path resolution.
 
 ### Configuration Precedence
 
@@ -95,5 +95,5 @@ Config values are resolved in this order (last wins):
 
 1. Dataclass defaults
 2. `HERDS_*` environment variables
-3. JSON config file (e.g., `herds-cli-config.json`)
+3. JSON config file (`$XDG_CONFIG_HOME/herds/config.json`, default `~/.config/herds/config.json`; override with `--config` or `HERDS_CONFIG_FILE`)
 4. CLI flags (`--base-url`, `--format`, etc.)

@@ -3,8 +3,8 @@ Herds CLI Session Management Module
 
 Manages user sessions with email-based filenames for secure local storage.
 
-Exports HERDS_DIR (~/.herds/), which is also imported by cli.py as the
-default config file directory.
+Session files live in the XDG state directory (``~/.local/state/herds/`` by
+default); see herds_cli.paths.state_dir.
 """
 
 import json
@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
+from herds_cli import paths
 from herds_cli.types import SessionData, SessionListEntry
 
 from rich.console import Console
@@ -22,11 +23,8 @@ from rich.console import Console
 console = Console(stderr=True)
 
 
-HERDS_DIR = Path.home() / ".herds"
-
-
 class SessionManager:
-    """Manages user sessions as JSON files in ~/.herds/ (or custom base_dir).
+    """Manages user sessions as JSON files in the XDG state dir (or custom base_dir).
 
     Files are named herds_session_{sanitized_email} where:
         @ → _at_,  + → _plus_,  . → _
@@ -39,7 +37,7 @@ class SessionManager:
     """
 
     def __init__(self, base_dir: Optional[str] = None):
-        self.base_dir = Path(base_dir) if base_dir else HERDS_DIR
+        self.base_dir = Path(base_dir) if base_dir else paths.state_dir()
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
     def sanitize_email(self, email: str) -> str:
