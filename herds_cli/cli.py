@@ -7,15 +7,16 @@ Supports user management and image operations with session-based authentication.
 """
 
 import click
+import os
 import sys
-from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
 from tzlocal import get_localzone
 import pytz
 
+from . import paths
 from .api import APIClient
-from .sessions import SessionManager, HERDS_DIR
+from .sessions import SessionManager
 from .images import ImageUploader
 from .output import OutputFormatter
 from .core.base import HerdsContext
@@ -132,7 +133,8 @@ def validate_timezone(timezone: str) -> str:
 @click.group(cls=HerdsGroup)
 @click.option(
     "--config",
-    help="Path to JSON configuration file (auto-detected if not specified)",
+    help="Path to JSON configuration file (defaults to the XDG config path; "
+    "also settable via HERDS_CONFIG_FILE)",
     type=click.Path(exists=True),
 )
 @click.option(
@@ -191,24 +193,31 @@ def cli(
     if ctx.obj.get("_initialized"):
         return
 
-    # Load configuration
+    # Load configuration.
+    #
+    # Precedence for which file to read: explicit --config flag, then the
+    # HERDS_CONFIG_FILE env var, then the XDG default. HERDS_CONFIG_FILE is
+    # read here (not via click's envvar=) on purpose: the --config option is
+    # click.Path(exists=True), and binding the env var to it would reject an
+    # ambient HERDS_CONFIG_FILE that points at a not-yet-created file, which
+    # would brick every command including the ones meant to create it. Read
+    # as a plain string, a missing path falls back to defaults below.
     try:
-        # If no config file specified, try local then ~/.herds/
         if config:
             config_path = config
-        elif Path("./herds-cli-config.json").exists():
-            config_path = "./herds-cli-config.json"
         else:
-            config_path = str(HERDS_DIR / "config.json")
+            config_path = os.environ.get("HERDS_CONFIG_FILE") or str(
+                paths.default_config_file()
+            )
         config_obj = Config.load(config_path)
     except FileNotFoundError:
-        # If default config file doesn't exist, load with defaults and env vars
         if config:
-            # If user explicitly specified a config file that doesn't exist, that's an error
+            # An explicitly-passed --config that doesn't exist is a user error.
             OutputFormatter.print_error(f"Configuration file not found: {config}")
             sys.exit(1)
-        # Otherwise, use defaults (this is normal when no config file exists yet)
-        config_obj = Config()
+        # No file at the default/env location yet: normal on a fresh install.
+        # Load() with no path still applies HERDS_* env vars.
+        config_obj = Config.load()
     except Exception as e:
         OutputFormatter.print_error(f"Failed to load configuration: {e}")
         sys.exit(1)

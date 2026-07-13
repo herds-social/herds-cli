@@ -46,7 +46,7 @@ Download your OAuth 2.0 client credentials from Google Cloud Console and save th
 
 The CLI will automatically parse this format and extract the necessary credentials.
 
-**Note:** This is separate from the general CLI configuration file (`herds-cli-config.json`). The Google OAuth configuration is specific to Google authentication and doesn't affect other CLI settings.
+**Note:** This is separate from the general CLI configuration file (`~/.config/herds/config.json`). The Google OAuth configuration is specific to Google authentication and doesn't affect other CLI settings.
 
 ## Usage
 
@@ -57,6 +57,7 @@ The CLI will automatically parse this format and extract the necessary credentia
 ```
 
 This will:
+
 1. Open your default web browser
 2. Redirect to Google for authentication
 3. Start a local server on port 8080 for the OAuth callback
@@ -72,14 +73,17 @@ This will:
 ## Troubleshooting
 
 ### "Google OAuth not configured"
+
 Make sure you've set the `HERDS_GOOGLE_CLIENT_ID` and `HERDS_GOOGLE_CLIENT_SECRET` environment variables or configured them in your config file.
 
 ### "OAuth flow failed"
+
 - Check that port 8080 is not blocked by firewall
 - Ensure your browser can access localhost
 - Verify your Google OAuth credentials are correct
 
 ### "Authentication timeout"
+
 The OAuth flow times out after 5 minutes. Restart the process if needed.
 
 ## Backend Integration
@@ -90,5 +94,5 @@ The CLI integrates with the existing `/api/users/auth/google` endpoint in the He
 - Exchanges them for session tokens
 - Creates user accounts automatically on first login
 - Supports both mobile and web client types (CLI uses mobile)</contents>
-</xai:function_call="read_lints">
-<parameter name="target_file">cli/herds_cli/commands/cmd_user.py
+  </xai:function_call="read_lints">
+  <parameter name="target_file">cli/herds_cli/commands/cmd_user.py

@@ -2,8 +2,21 @@
 Unit tests for SessionManager.
 
 Tests the real SessionManager with a tmp_path base directory,
-verifying save/load/delete/list without touching ~/.herds/.
+verifying save/load/delete/list without touching the real state directory.
 """
+
+from herds_cli.sessions import SessionManager
+
+
+class TestSessionManagerDefaultBaseDir:
+    def test_defaults_to_xdg_state_dir(self, tmp_path, monkeypatch):
+        # With no base_dir, SessionManager must land under the XDG state dir
+        # (~/.local/state/herds by default). Redirect XDG_STATE_HOME so no
+        # real directory is touched.
+        monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+        manager = SessionManager()
+        assert manager.base_dir == tmp_path / "state" / "herds"
+        assert manager.base_dir.is_dir()
 
 
 class TestSessionManagerSanitizeEmail:

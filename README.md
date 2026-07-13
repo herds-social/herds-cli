@@ -149,13 +149,13 @@ herds events list
 
 ### Configuration
 
-| Command                    | Description                                     |
-| -------------------------- | ----------------------------------------------- |
-| `herds config show`        | Display current config                          |
-| `herds config validate`    | Validate config                                 |
-| `herds config set`         | Set config values (interactive or programmatic) |
-| `herds config save <file>` | Save config to a JSON file                      |
-| `herds config reset`       | Show defaults                                   |
+| Command                    | Description                                                  |
+| -------------------------- | ------------------------------------------------------------ |
+| `herds config show`        | Display current config                                       |
+| `herds config validate`    | Validate config                                              |
+| `herds config set`         | Set config values (interactive or programmatic)              |
+| `herds config save [file]` | Save config to a JSON file (defaults to the XDG config path) |
+| `herds config reset`       | Show defaults                                                |
 
 ## Global options
 
@@ -175,8 +175,9 @@ herds events list
 The CLI loads settings in this order (last wins):
 
 1. Built-in defaults
-2. `herds-cli-config.json` in the current directory
-3. Environment variables (`HERDS_API_URL`, `HERDS_OUTPUT_FORMAT`, etc.)
+2. Environment variables (`HERDS_API_URL`, `HERDS_OUTPUT_FORMAT`, etc.)
+3. Config file: `~/.config/herds/config.json` by default (honors
+   `$XDG_CONFIG_HOME`); override with `--config PATH` or `HERDS_CONFIG_FILE`
 4. CLI flags (`--base-url`, `--format`, etc.)
 
 ```bash
@@ -193,11 +194,13 @@ herds --config my-config.json events list
 
 ## Session management
 
-Sessions are stored as JSON files in `~/.herds/` with one file per account:
+Sessions are stored as JSON files in the XDG state directory
+(`~/.local/state/herds/`, or `$XDG_STATE_HOME/herds/`) with one file per
+account:
 
 ```
-~/.herds/herds_session_you_at_example_com
-~/.herds/herds_session_admin_at_herds_events
+~/.local/state/herds/herds_session_you_at_example_com
+~/.local/state/herds/herds_session_admin_at_herds_events
 ```
 
 - Files are created with `0600` permissions (owner-only read/write).
@@ -253,7 +256,7 @@ herds --verbose --debug-requests image upload flyer.jpg
 | "No active sessions found"         | Run `herds user login` first                                            |
 | "Multiple sessions found"          | Add `--account you@example.com` to pick one                             |
 | API connection errors              | Check `herds config show` for the API URL; ensure the server is running |
-| Permission errors on session files | Check directory permissions on `~/.herds/`                              |
+| Permission errors on session files | Check directory permissions on `~/.local/state/herds/`                  |
 | Command not found                  | Verify installation: `which herds` or `pipx list`                       |
 
 Use `herds config validate` to check your configuration is complete.
