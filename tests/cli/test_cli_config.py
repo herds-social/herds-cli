@@ -109,3 +109,24 @@ class TestGroupConfigResolution:
         result = cli_runner.invoke(cli, ["config", "validate"])
 
         assert result.exit_code == 0, result.output
+
+    def test_group_config_flag_propagates_to_subcommand(
+        self, cli_runner, tmp_path, monkeypatch
+    ):
+        # `herds --config X config show` must read X even when an XDG default
+        # config also exists; the group-level path propagates to subcommands.
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+        monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+        monkeypatch.delenv("HERDS_CONFIG_FILE", raising=False)
+        xdg_default = tmp_path / "cfg" / "herds" / "config.json"
+        xdg_default.parent.mkdir(parents=True, exist_ok=True)
+        xdg_default.write_text(json.dumps({"api_url": "https://xdg.example.com"}))
+        explicit = tmp_path / "explicit.json"
+        explicit.write_text(json.dumps({"api_url": "https://explicit.example.com"}))
+
+        result = cli_runner.invoke(cli, ["--config", str(explicit), "config", "show"])
+
+        assert result.exit_code == 0, result.output
+        output = strip_ansi(result.output)
+        assert "explicit.example.com" in output
+        assert "xdg.example.com" not in output

@@ -271,6 +271,10 @@ def cli(
         "base_url": config_obj.api_url,
     }
     ctx.obj.update(herds_ctx)
+    # The config-file path resolved above, so `config` subcommands invoked
+    # without their own --config-file inherit the same file the group chose
+    # (e.g. `herds --config X config set ...` writes to X, not the default).
+    ctx.obj["config_path"] = config_path
     # Track whether --format was passed on the command line (vs. inherited
     # from config defaults). Commands that conditionally reject combinations
     # of flags (e.g. `image upload --poll` vs. an explicit `--format json`)

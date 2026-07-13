@@ -190,7 +190,7 @@ def show(ctx, config_file):
         herds config show
         herds config show --config my-config.json
     """
-    config_file = paths.resolve_config_file(config_file)
+    config_file = paths.resolve_config_file(config_file or ctx.obj.get("config_path"))
     # Try to load from config file if it exists, otherwise use current config
     try:
         config_obj = Config.load(config_file)
@@ -261,7 +261,7 @@ def save(ctx, config_file, force):
         OutputFormatter.print_error("Configuration not loaded")
         sys.exit(1)
 
-    config_file = paths.resolve_config_file(config_file)
+    config_file = paths.resolve_config_file(config_file or ctx.obj.get("config_path"))
     path = Path(config_file)
     if path.exists() and not force:
         OutputFormatter.print_error(f"Configuration file already exists: {config_file}")
@@ -383,7 +383,7 @@ def set(ctx, config_file, local, prod, key, value):
     if local or prod:
         value = _resolve_api_url_shortcut(local, prod, key, value)
 
-    config_file = paths.resolve_config_file(config_file)
+    config_file = paths.resolve_config_file(config_file or ctx.obj.get("config_path"))
 
     # Load existing configuration from file if it exists, otherwise use current config
     try:
