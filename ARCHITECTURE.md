@@ -87,7 +87,7 @@ Domain errors use the `HerdsError` hierarchy (`core/exceptions.py`). Helpers in 
 
 ### Session Storage
 
-`SessionManager` persists sessions as JSON files in the XDG state directory (`~/.local/state/herds/`, or `$XDG_STATE_HOME/herds/`) with filename convention `herds_session_{sanitized_email}` (where `@` → `_at_`, `.` → `_`). Files use `0600` permissions. See `herds_cli/paths.py` for path resolution.
+`SessionManager` persists sessions as JSON files in the XDG state directory (`$XDG_STATE_HOME/herds/`, default `~/.local/state/herds/`) with filename convention `herds_session_{sanitized_email}` (where `@` → `_at_`, `.` → `_`). Files use `0600` permissions. Override the directory with `HERDS_SESSION_DIR` or the `session_dir` config key. See `herds_cli/paths.py` for path resolution.
 
 ### Configuration Precedence
 
@@ -95,5 +95,5 @@ Config values are resolved in this order (last wins):
 
 1. Dataclass defaults
 2. `HERDS_*` environment variables
-3. JSON config file (`~/.config/herds/config.json` by default; override with `--config` or `HERDS_CONFIG_FILE`)
+3. JSON config file (`$XDG_CONFIG_HOME/herds/config.json`, default `~/.config/herds/config.json`; override with `--config` or `HERDS_CONFIG_FILE`)
 4. CLI flags (`--base-url`, `--format`, etc.)

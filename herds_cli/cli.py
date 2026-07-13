@@ -7,7 +7,6 @@ Supports user management and image operations with session-based authentication.
 """
 
 import click
-import os
 import sys
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -193,22 +192,14 @@ def cli(
     if ctx.obj.get("_initialized"):
         return
 
-    # Load configuration.
-    #
-    # Precedence for which file to read: explicit --config flag, then the
-    # HERDS_CONFIG_FILE env var, then the XDG default. HERDS_CONFIG_FILE is
-    # read here (not via click's envvar=) on purpose: the --config option is
-    # click.Path(exists=True), and binding the env var to it would reject an
-    # ambient HERDS_CONFIG_FILE that points at a not-yet-created file, which
-    # would brick every command including the ones meant to create it. Read
-    # as a plain string, a missing path falls back to defaults below.
+    # Load configuration. paths.resolve_config_file applies the precedence
+    # (explicit --config -> HERDS_CONFIG_FILE -> XDG default). HERDS_CONFIG_FILE
+    # is read there as a plain string, not bound to click's exists=True --config
+    # option: binding it would reject an ambient env var pointing at a
+    # not-yet-created file and brick the commands meant to create it. A missing
+    # path falls back to defaults below.
     try:
-        if config:
-            config_path = config
-        else:
-            config_path = os.environ.get("HERDS_CONFIG_FILE") or str(
-                paths.default_config_file()
-            )
+        config_path = paths.resolve_config_file(config)
         config_obj = Config.load(config_path)
     except FileNotFoundError:
         if config:

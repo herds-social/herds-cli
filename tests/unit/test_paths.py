@@ -68,3 +68,21 @@ class TestHerdsSubdirs:
         monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "s"))
         assert paths.default_config_file() == tmp_path / "c" / "herds" / "config.json"
         assert paths.state_dir() == tmp_path / "s" / "herds"
+
+
+class TestResolveConfigFile:
+    def test_explicit_path_wins(self, fake_home, monkeypatch):
+        monkeypatch.setenv("HERDS_CONFIG_FILE", "/env/path.json")
+        assert paths.resolve_config_file("/explicit.json") == "/explicit.json"
+
+    def test_env_used_when_no_explicit(self, fake_home, monkeypatch):
+        monkeypatch.setenv("HERDS_CONFIG_FILE", "/env/path.json")
+        assert paths.resolve_config_file(None) == "/env/path.json"
+
+    def test_falls_back_to_xdg_default(self, fake_home, monkeypatch):
+        monkeypatch.delenv("HERDS_CONFIG_FILE", raising=False)
+        assert paths.resolve_config_file(None) == str(paths.default_config_file())
+
+    def test_empty_env_falls_back_to_default(self, fake_home, monkeypatch):
+        monkeypatch.setenv("HERDS_CONFIG_FILE", "")
+        assert paths.resolve_config_file(None) == str(paths.default_config_file())

@@ -198,7 +198,7 @@ Sessions are stored as JSON files in the XDG state directory
 (`~/.local/state/herds/`, or `$XDG_STATE_HOME/herds/`) with one file per
 account:
 
-```
+```text
 ~/.local/state/herds/herds_session_you_at_example_com
 ~/.local/state/herds/herds_session_admin_at_herds_events
 ```

@@ -6,7 +6,6 @@ CLI configuration.
 """
 
 import click
-import os
 import sys
 from pathlib import Path
 from typing import NotRequired, Optional, TypedDict
@@ -85,20 +84,6 @@ CONFIG_KEYS: dict[str, ConfigKeyInfo] = {
         "current": None,
     },
 }
-
-
-def _resolve_config_file(config_file: Optional[str]) -> str:
-    """Resolve which config file to read/write.
-
-    Precedence: the explicit path (flag or argument), then the
-    HERDS_CONFIG_FILE env var, then the XDG default. Mirrors the group-level
-    resolution in cli.py so every config subcommand agrees on the location.
-    """
-    return (
-        config_file
-        or os.environ.get("HERDS_CONFIG_FILE")
-        or str(paths.default_config_file())
-    )
 
 
 def _display_value(
@@ -205,7 +190,7 @@ def show(ctx, config_file):
         herds config show
         herds config show --config my-config.json
     """
-    config_file = _resolve_config_file(config_file)
+    config_file = paths.resolve_config_file(config_file)
     # Try to load from config file if it exists, otherwise use current config
     try:
         config_obj = Config.load(config_file)
@@ -276,7 +261,7 @@ def save(ctx, config_file, force):
         OutputFormatter.print_error("Configuration not loaded")
         sys.exit(1)
 
-    config_file = _resolve_config_file(config_file)
+    config_file = paths.resolve_config_file(config_file)
     path = Path(config_file)
     if path.exists() and not force:
         OutputFormatter.print_error(f"Configuration file already exists: {config_file}")
@@ -398,7 +383,7 @@ def set(ctx, config_file, local, prod, key, value):
     if local or prod:
         value = _resolve_api_url_shortcut(local, prod, key, value)
 
-    config_file = _resolve_config_file(config_file)
+    config_file = paths.resolve_config_file(config_file)
 
     # Load existing configuration from file if it exists, otherwise use current config
     try:

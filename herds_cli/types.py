@@ -32,7 +32,8 @@ class GoogleOAuthConfig(Protocol):
 
 
 # ---------------------------------------------------------------------------
-# Session data (persisted as JSON in the XDG state dir, ~/.local/state/herds/)
+# Session data (persisted as JSON in $XDG_STATE_HOME/herds/, default
+# ~/.local/state/herds/)
 # ---------------------------------------------------------------------------
 
 class TokenData(TypedDict, total=False):

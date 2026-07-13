@@ -10,6 +10,7 @@ home-directory path.
 
 import os
 from pathlib import Path
+from typing import Optional
 
 # Application subdirectory created under each XDG base directory.
 _APP_DIR = "herds"
@@ -53,3 +54,16 @@ def default_config_file() -> Path:
 def state_dir() -> Path:
     """Herds state directory holding session files: ``<state-home>/herds``."""
     return xdg_state_home() / _APP_DIR
+
+
+def resolve_config_file(explicit: Optional[str]) -> str:
+    """Resolve which config file to read or write.
+
+    Precedence: the explicit path (a ``--config`` flag or a command
+    argument), then ``$HERDS_CONFIG_FILE``, then the XDG default. This is the
+    single definition of that precedence; cli.py and the ``config``
+    subcommands both call it so the two can never drift.
+    """
+    return explicit or os.environ.get("HERDS_CONFIG_FILE") or str(
+        default_config_file()
+    )

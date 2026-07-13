@@ -93,6 +93,4 @@ The CLI integrates with the existing `/api/users/auth/google` endpoint in the He
 - Accepts Google ID tokens
 - Exchanges them for session tokens
 - Creates user accounts automatically on first login
-- Supports both mobile and web client types (CLI uses mobile)</contents>
-  </xai:function_call="read_lints">
-  <parameter name="target_file">cli/herds_cli/commands/cmd_user.py
+- Supports both mobile and web client types (CLI uses mobile)

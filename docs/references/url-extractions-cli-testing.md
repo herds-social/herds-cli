@@ -56,9 +56,11 @@ herds ping
 herds config show
 ```
 
-Config lives at `~/.config/herds/config.json` (override with `--config` or
-`HERDS_CONFIG_FILE`) and sessions under `~/.local/state/herds/`, following the
-XDG Base Directory spec.
+Config lives at `$XDG_CONFIG_HOME/herds/config.json` (default
+`~/.config/herds/config.json`); override with `--config` or `HERDS_CONFIG_FILE`.
+Sessions live at `$XDG_STATE_HOME/herds/` (default `~/.local/state/herds/`);
+override the session directory with `HERDS_SESSION_DIR` or the `session_dir`
+config key. Follows the XDG Base Directory spec.
 
 ---
 
