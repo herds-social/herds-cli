@@ -84,6 +84,18 @@ def isolated_xdg(tmp_path, monkeypatch):
 
 
 class TestGroupConfigResolution:
+    """Bootstrap tests that deliberately run the real root group.
+
+    These invoke ``cli`` WITHOUT ``obj=cli_obj`` on purpose: they exercise the
+    group's config-file resolution (which file is read/written for which
+    flags/env), and the ``_initialized`` guard that ``cli_obj`` trips skips
+    exactly that code. Injecting the fixture would make these assert nothing.
+    They stay safe because ``isolated_xdg`` / explicit ``XDG_*`` env redirect
+    all real filesystem access to a tmp dir, and no command here hits the
+    network. This is the documented exception to the ``obj=cli_obj`` convention
+    that the rest of ``tests/cli`` follows.
+    """
+
     def test_cwd_config_file_is_no_longer_auto_loaded(
         self, cli_runner, isolated_xdg
     ):
