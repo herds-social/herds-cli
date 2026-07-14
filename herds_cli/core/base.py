@@ -321,6 +321,11 @@ class EventCommandBase(CommandBase):
                 else:
                     OutputFormatter.print_info(message)
 
+        # Exhaustive dump: walk the live dict so every server field is
+        # visible, including ones EventV2 does not model.
+        OutputFormatter.print_info("─── Full event data ───")
+        _render_event_fields(dict(event_data))
+
 
 class ImageCommandBase(CommandBase):
     """Base class for image-related commands with common image display logic."""

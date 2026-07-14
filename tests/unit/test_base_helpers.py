@@ -402,6 +402,52 @@ class TestDisplayEventDetails:
         out = capsys.readouterr().err
         assert "2026-08-01 at 7:00 PM" in out
 
+    def test_full_event_data_dump_appears_after_curated_header(self, capsys):
+        """The dump heading follows the curated block, so casual reads see
+        the friendly summary first."""
+        self._make_cmd().display_event_details(self.BASE_EVENT)
+        out = capsys.readouterr().err
+        assert "Full event data" in out
+        assert out.index("Category:") < out.index("Full event data")
+
+    def test_dump_includes_fields_the_header_omits(self, capsys):
+        """street_address and contact.website are modeled but not in the
+        curated header; the dump must surface them."""
+        event = {
+            **self.BASE_EVENT,
+            "location": {
+                "city": "Austin",
+                "state": "TX",
+                "street_address": "1300 South Blvd",
+            },
+            "contact": {
+                "organizer": "Live Nation",
+                "website": "https://example.com/gig",
+            },
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "street_address: 1300 South Blvd" in out
+        assert "website: https://example.com/gig" in out
+
+    def test_dump_includes_unmodeled_server_fields(self, capsys):
+        """Fields absent from the EventV2 TypedDict still appear: the walker
+        reads the live dict, so new server fields need no CLI change."""
+        event = {**self.BASE_EVENT, "confidence_score": 0.97}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "confidence_score: 0.97" in out
+
+    def test_dump_omits_none_and_empty_fields(self, capsys):
+        """None/empty fields stay out of the dump (the curated header is
+        unchanged and may still print 'Category: None')."""
+        event = {**self.BASE_EVENT, "event_description": None, "tags": []}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        dump = out[out.index("Full event data"):]
+        assert "event_description" not in dump
+        assert "tags" not in dump
+
 
 class TestRenderEventFields:
     """Unit tests for the recursive full-event-data walker.
