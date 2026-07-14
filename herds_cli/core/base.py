@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, TypedDict
 
 import click
 import requests
+from rich.markup import escape
 
 from herds_cli.api import APIClient
 from herds_cli.calendar_status_display import (
@@ -532,11 +533,12 @@ def _render_event_fields(data: Dict[str, Any], indent: int = 1) -> None:
     for key, value in data.items():
         if not _has_renderable_content(value):
             continue
+        safe_key = escape(str(key))
         if isinstance(value, dict):
-            OutputFormatter.print_info(f"{prefix}{key}:")
+            OutputFormatter.print_info(f"{prefix}{safe_key}:")
             _render_event_fields(value, indent + 1)
         elif isinstance(value, list):
-            OutputFormatter.print_info(f"{prefix}{key}:")
+            OutputFormatter.print_info(f"{prefix}{safe_key}:")
             for item in value:
                 if not _has_renderable_content(item):
                     continue
@@ -544,6 +546,6 @@ def _render_event_fields(data: Dict[str, Any], indent: int = 1) -> None:
                     OutputFormatter.print_info(f"{prefix}  -")
                     _render_event_fields(item, indent + 2)
                 else:
-                    OutputFormatter.print_info(f"{prefix}  - {item}")
+                    OutputFormatter.print_info(f"{prefix}  - {escape(str(item))}")
         else:
-            OutputFormatter.print_info(f"{prefix}{key}: {value}")
+            OutputFormatter.print_info(f"{prefix}{safe_key}: {escape(str(value))}")

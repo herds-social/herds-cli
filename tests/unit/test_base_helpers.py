@@ -534,6 +534,22 @@ class TestRenderEventFields:
         assert _has_renderable_content([None, ""]) is False
         assert _has_renderable_content([None, "x"]) is True
 
+    def test_markup_like_values_render_literally_without_crashing(self, capsys):
+        """Server values are arbitrary text; Rich markup in them must be
+        escaped, not interpreted. An unmatched closing tag would otherwise
+        raise MarkupError and abort the command."""
+        _render_event_fields(
+            {
+                "description": "see [/red] tag",
+                "notes": ["[bold]not bold[/bold]"],
+                "nested": {"[key]": "[red]literal[/red]"},
+            }
+        )
+        err = capsys.readouterr().err
+        assert "see [/red] tag" in err
+        assert "[bold]not bold[/bold]" in err
+        assert "[red]literal[/red]" in err
+
 
 class TestAPIResponseHandler:
     def _make_response(self, status_code, json_data=None, text=""):
