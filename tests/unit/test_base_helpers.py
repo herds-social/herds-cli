@@ -16,6 +16,8 @@ from herds_cli.core.base import (
     extract_user_id_from_session,
     display_events_summary,
     APIResponseHandler,
+    _has_renderable_content,
+    _render_event_fields,
 )
 from herds_cli.core.config import Config
 from herds_cli.core.exceptions import (
@@ -399,6 +401,92 @@ class TestDisplayEventDetails:
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
         assert "2026-08-01 at 7:00 PM" in out
+
+
+class TestRenderEventFields:
+    """Unit tests for the recursive full-event-data walker.
+
+    The walker prints every populated field of the live event dict via
+    OutputFormatter.print_info (stderr), so new server fields appear
+    without a CLI change. Empty values are pruned recursively."""
+
+    def test_scalar_fields_render_indented(self, capsys):
+        _render_event_fields({"title": "Game Night", "id": "abc123"})
+        err = capsys.readouterr().err
+        assert "  title: Game Night" in err
+        assert "  id: abc123" in err
+
+    def test_nested_dict_recurses_with_deeper_indent(self, capsys):
+        _render_event_fields(
+            {"location": {"city": "Charlotte", "street_address": "1300 South Blvd"}}
+        )
+        err = capsys.readouterr().err
+        assert "  location:" in err
+        assert "    city: Charlotte" in err
+        assert "    street_address: 1300 South Blvd" in err
+
+    def test_none_and_empty_values_omitted(self, capsys):
+        _render_event_fields(
+            {
+                "title": "Kept",
+                "category_level_1": None,
+                "notes": "",
+                "tags": [],
+                "extra": {},
+            }
+        )
+        err = capsys.readouterr().err
+        assert "title: Kept" in err
+        assert "category_level_1" not in err
+        assert "notes" not in err
+        assert "tags" not in err
+        assert "extra" not in err
+
+    def test_dict_of_all_empty_values_omitted_entirely(self, capsys):
+        """A nested dict whose members are all empty must not leave a
+        dangling 'contact:' heading with nothing under it."""
+        _render_event_fields(
+            {"title": "Kept", "contact": {"email": None, "phone": ""}}
+        )
+        err = capsys.readouterr().err
+        assert "title: Kept" in err
+        assert "contact" not in err
+
+    def test_falsy_but_meaningful_values_kept(self, capsys):
+        """0 and False are real data (price: 0, is_free: False), not emptiness."""
+        _render_event_fields({"price": 0, "recurring": False})
+        err = capsys.readouterr().err
+        assert "  price: 0" in err
+        assert "  recurring: False" in err
+
+    def test_list_of_scalars_renders_as_dash_items(self, capsys):
+        _render_event_fields({"tags": ["music", "outdoor"]})
+        err = capsys.readouterr().err
+        assert "  tags:" in err
+        assert "    - music" in err
+        assert "    - outdoor" in err
+
+    def test_list_of_dicts_recurses(self, capsys):
+        _render_event_fields(
+            {"occurrences": [{"date": "2026-07-13"}, {"date": "2026-07-20"}]}
+        )
+        err = capsys.readouterr().err
+        assert "  occurrences:" in err
+        assert "date: 2026-07-13" in err
+        assert "date: 2026-07-20" in err
+
+    def test_has_renderable_content_predicate(self):
+        assert _has_renderable_content("x") is True
+        assert _has_renderable_content(0) is True
+        assert _has_renderable_content(False) is True
+        assert _has_renderable_content(None) is False
+        assert _has_renderable_content("") is False
+        assert _has_renderable_content({}) is False
+        assert _has_renderable_content([]) is False
+        assert _has_renderable_content({"a": None, "b": ""}) is False
+        assert _has_renderable_content({"a": {"b": "deep"}}) is True
+        assert _has_renderable_content([None, ""]) is False
+        assert _has_renderable_content([None, "x"]) is True
 
 
 class TestAPIResponseHandler:

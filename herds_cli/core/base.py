@@ -498,3 +498,47 @@ def display_events_summary(events: List[EventV2]) -> None:
 
     if len(events) > 5:
         OutputFormatter.print_info(f"  ... and {len(events) - 5} more events")
+
+
+def _has_renderable_content(value: Any) -> bool:
+    """True if `value` would produce at least one line in the full-event dump.
+
+    None and empty strings are noise; dicts and lists are renderable only if
+    at least one member is. Falsy-but-meaningful scalars (0, False) count as
+    content.
+    """
+    if value is None or value == "":
+        return False
+    if isinstance(value, dict):
+        return any(_has_renderable_content(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_has_renderable_content(v) for v in value)
+    return True
+
+
+def _render_event_fields(data: Dict[str, Any], indent: int = 1) -> None:
+    """Render every populated field of an event dict, recursively.
+
+    Walks the live dict rather than a field list so unmodeled server fields
+    surface automatically. Each line goes to stderr via
+    OutputFormatter.print_info, matching the curated header lines.
+    """
+    prefix = "  " * indent
+    for key, value in data.items():
+        if not _has_renderable_content(value):
+            continue
+        if isinstance(value, dict):
+            OutputFormatter.print_info(f"{prefix}{key}:")
+            _render_event_fields(value, indent + 1)
+        elif isinstance(value, list):
+            OutputFormatter.print_info(f"{prefix}{key}:")
+            for item in value:
+                if not _has_renderable_content(item):
+                    continue
+                if isinstance(item, dict):
+                    OutputFormatter.print_info(f"{prefix}  -")
+                    _render_event_fields(item, indent + 2)
+                else:
+                    OutputFormatter.print_info(f"{prefix}  - {item}")
+        else:
+            OutputFormatter.print_info(f"{prefix}{key}: {value}")
