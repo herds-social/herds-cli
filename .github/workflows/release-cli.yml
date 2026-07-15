@@ -2,14 +2,58 @@ name: Release CLI
 
 on:
   push:
+    branches: [main]
     tags:
       - "cli-v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-cli
+  cancel-in-progress: false
+
 jobs:
-  build-and-release:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.state.outputs.version }}
+      release_exists: ${{ steps.state.outputs.release_exists }}
+      formula_current: ${{ steps.state.outputs.formula_current }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine release state
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          init_version=$(python3 -c "import re; print(re.search(r'__version__ = \"([^\"]+)\"', open('herds_cli/__init__.py').read()).group(1))")
+          if [ "$version" != "$init_version" ]; then
+            echo "::error::pyproject.toml ($version) and herds_cli/__init__.py ($init_version) versions disagree"
+            exit 1
+          fi
+          if gh release view "cli-v$version" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            release_exists=true
+          else
+            release_exists=false
+          fi
+          if gh api repos/herds-social/homebrew-herds-cli/contents/Formula/herds.rb --jq '.content' | base64 -d | grep -q "/cli-v$version/"; then
+            formula_current=true
+          else
+            formula_current=false
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release_exists=$release_exists" >> "$GITHUB_OUTPUT"
+          echo "formula_current=$formula_current" >> "$GITHUB_OUTPUT"
+          echo "version=$version release_exists=$release_exists formula_current=$formula_current"
+
+  release:
+    needs: check
+    if: needs.check.outputs.release_exists == 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,5 +71,61 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: cli-v${{ needs.check.outputs.version }}
           files: dist/*
           generate_release_notes: true
+
+  tap-bump:
+    needs: [check, release]
+    if: >-
+      always() &&
+      needs.check.result == 'success' &&
+      needs.check.outputs.formula_current == 'false' &&
+      (needs.release.result == 'success' ||
+       (needs.release.result == 'skipped' && needs.check.outputs.release_exists == 'true'))
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install the CLI into a clean virtualenv
+        run: |
+          python -m venv venv
+          venv/bin/pip install --quiet .
+
+      - name: Download release sdist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "cli-v$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --pattern "herds_cli-$VERSION.tar.gz" --dir sdist
+
+      - name: Generate formula
+        run: |
+          venv/bin/python scripts/generate_formula.py \
+            --version "$VERSION" \
+            --sdist-path "sdist/herds_cli-$VERSION.tar.gz" \
+            --output herds.rb
+
+      - name: Push formula to tap
+        env:
+          TAP_PUSH_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${TAP_PUSH_TOKEN}@github.com/herds-social/homebrew-herds-cli.git" tap
+          cp herds.rb tap/Formula/herds.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Formula already up to date"
+            exit 0
+          fi
+          git add Formula/herds.rb
+          git commit -m "herds $VERSION"
+          git push origin main || { git pull --rebase origin main && git push origin main; }
