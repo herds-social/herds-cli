@@ -29,6 +29,7 @@ Tests live under `tests/`:
 
 - `tests/unit/` — unit tests for individual modules (api, config, images, helpers, types/oauth)
 - `tests/cli/` — Click CliRunner tests that invoke commands end-to-end with mocked HTTP
+- `tests/scripts/` - tests for the release/CI tooling under `scripts/` (version guard, formula generator)
 
 CLI tests inject a fully-built `ctx.obj` via `CliRunner.invoke(..., obj=cli_obj)` and rely on the `_initialized` guard in `cli.cli()` to skip config loading. Shared fixtures (`mock_api_client`, `mock_session_manager`, `cli_obj`) are in `tests/cli/conftest.py` and `tests/unit/conftest.py`.
 

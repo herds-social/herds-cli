@@ -4,9 +4,12 @@ Run inside a virtualenv that has the CLI (and therefore its runtime
 dependencies) installed:
 
     venv/bin/python scripts/generate_formula.py \
-        --version 4.4.0 \
         --sdist-path sdist/herds_cli-4.4.0.tar.gz \
         --output herds.rb
+
+The release version is read from the installed herds-cli distribution (the
+sdist the venv was built from), so the formula url, sha256, and resources
+can never describe different versions.
 
 Every distribution installed in the running interpreter's environment,
 minus the CLI itself and installer tooling, becomes a ``resource`` block
@@ -179,7 +182,6 @@ def render_formula(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", required=True)
     parser.add_argument("--sdist-path", required=True)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
@@ -191,13 +193,14 @@ def main() -> int:
             print(f"error: {problem}", file=sys.stderr)
         return 1
 
+    release_version = metadata.version("herds-cli")
     with requests.Session() as http:
         resources = [
             fetch_sdist_info(name, version, http)
             for name, version in select_resource_dists(distributions)
         ]
     formula = render_formula(
-        args.version, sha256_file(args.sdist_path), resources
+        release_version, sha256_file(args.sdist_path), resources
     )
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(formula)

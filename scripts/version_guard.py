@@ -55,6 +55,16 @@ def version_key(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in version.split("."))
 
 
+def version_mismatch(head_version: str, init_version: str) -> str | None:
+    """One shared mismatch rule for the PR guard and the release check."""
+    if head_version != init_version:
+        return (
+            f"version mismatch: pyproject.toml has {head_version}, "
+            f"{INIT_PATH} has {init_version}"
+        )
+    return None
+
+
 def check_guard(
     base_version: str,
     head_version: str,
@@ -66,11 +76,9 @@ def check_guard(
 ) -> list[str]:
     """Return failure messages; empty means the PR passes the guard."""
     failures: list[str] = []
-    if head_version != init_version:
-        failures.append(
-            f"version mismatch: pyproject.toml has {head_version}, "
-            f"{INIT_PATH} has {init_version}"
-        )
+    mismatch = version_mismatch(head_version, init_version)
+    if mismatch is not None:
+        failures.append(mismatch)
     if tag_exists:
         failures.append(f"tag cli-v{head_version} already exists on origin")
     if version_key(head_version) < version_key(base_version):
@@ -101,11 +109,9 @@ def verified_head_version(pyproject_text: str, init_text: str) -> str:
     """Return the version once both version files agree; raise otherwise."""
     head_version, _ = parse_pyproject(pyproject_text)
     init_version = parse_init_version(init_text)
-    if head_version != init_version:
-        raise ValueError(
-            f"version mismatch: pyproject.toml has {head_version}, "
-            f"{INIT_PATH} has {init_version}"
-        )
+    mismatch = version_mismatch(head_version, init_version)
+    if mismatch is not None:
+        raise ValueError(mismatch)
     return head_version
 
 

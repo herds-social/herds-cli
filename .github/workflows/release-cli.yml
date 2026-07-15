@@ -7,6 +7,11 @@
 # created by the release job does not re-trigger this workflow because events
 # from the default GITHUB_TOKEN never trigger workflows - do not "fix" the
 # release step to use a PAT, that would enable recursive runs.
+#
+# Warning: re-pushing an OLD cli-v* tag (or dispatching from a stale ref)
+# regenerates the tap formula for that older version - a deliberate
+# downgrade for every brew user. Use the recovery triggers only from the
+# ref you actually want published.
 name: Release CLI
 
 on:
@@ -51,10 +56,17 @@ jobs:
           # tag, the release assets, and the formula URL downstream.
           version=$(python3 scripts/version_guard.py --print-version)
           test -n "$version"
-          if gh release view "cli-v$version" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+          # "not found" means no release yet; any other failure (auth,
+          # network) must fail the job, or a transient error would re-run
+          # the release action against an already-published release.
+          release_err=$(mktemp)
+          if gh release view "cli-v$version" --repo "$GITHUB_REPOSITORY" > /dev/null 2> "$release_err"; then
             release_exists=true
-          else
+          elif grep -qi "not found" "$release_err"; then
             release_exists=false
+          else
+            cat "$release_err" >&2
+            exit 1
           fi
           # The generated formula's url embeds /cli-v<version>/ (RELEASE_URL
           # in scripts/generate_formula.py); its presence means the tap
@@ -136,15 +148,22 @@ jobs:
           gh release download "cli-v$VERSION" --repo "$GITHUB_REPOSITORY" \
             --pattern "herds_cli-$VERSION.tar.gz" --dir sdist
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # Constrain the venv to uv.lock's pins so the formula ships the exact
+      # dependency versions CI tested, not whatever PyPI resolves today.
       - name: Install the release sdist into a clean virtualenv
         run: |
+          # --no-hashes: hashes in a constraints file put pip in
+          # --require-hashes mode, which rejects the local sdist path.
+          uv export --no-dev --no-emit-project --no-hashes --format requirements-txt -o constraints.txt
           python -m venv venv
-          venv/bin/pip install --quiet "sdist/herds_cli-$VERSION.tar.gz"
+          venv/bin/pip install --quiet --constraint constraints.txt "sdist/herds_cli-$VERSION.tar.gz"
 
       - name: Generate formula
         run: |
           venv/bin/python scripts/generate_formula.py \
-            --version "$VERSION" \
             --sdist-path "sdist/herds_cli-$VERSION.tar.gz" \
             --output herds.rb
 
@@ -162,11 +181,13 @@ jobs:
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet; then
+          # Stage before the no-op check: an unstaged diff misses the case
+          # where the formula file is brand new (untracked) in the tap.
+          git add Formula/herds.rb
+          if git diff --cached --quiet; then
             echo "Formula already up to date"
             exit 0
           fi
-          git add Formula/herds.rb
           git commit -m "herds $VERSION"
           # One rebase retry in case another writer pushed to the tap since
           # the clone above.
