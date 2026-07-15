@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, TypedDict
 
 import click
 import requests
+from rich.markup import escape
 
 from herds_cli.api import APIClient
 from herds_cli.calendar_status_display import (
@@ -321,6 +322,11 @@ class EventCommandBase(CommandBase):
                 else:
                     OutputFormatter.print_info(message)
 
+        # Exhaustive dump: walk the live dict so every server field is
+        # visible, including ones EventV2 does not model.
+        OutputFormatter.print_info("─── Full event data ───")
+        _render_event_fields(dict(event_data))
+
 
 class ImageCommandBase(CommandBase):
     """Base class for image-related commands with common image display logic."""
@@ -498,3 +504,48 @@ def display_events_summary(events: List[EventV2]) -> None:
 
     if len(events) > 5:
         OutputFormatter.print_info(f"  ... and {len(events) - 5} more events")
+
+
+def _has_renderable_content(value: Any) -> bool:
+    """True if `value` would produce at least one line in the full-event dump.
+
+    None and empty strings are noise; dicts and lists are renderable only if
+    at least one member is. Falsy-but-meaningful scalars (0, False) count as
+    content.
+    """
+    if value is None or value == "":
+        return False
+    if isinstance(value, dict):
+        return any(_has_renderable_content(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_has_renderable_content(v) for v in value)
+    return True
+
+
+def _render_event_fields(data: Dict[str, Any], indent: int = 1) -> None:
+    """Render every populated field of an event dict, recursively.
+
+    Walks the live dict rather than a field list so unmodeled server fields
+    surface automatically. Each line goes to stderr via
+    OutputFormatter.print_info, matching the curated header lines.
+    """
+    prefix = "  " * indent
+    for key, value in data.items():
+        if not _has_renderable_content(value):
+            continue
+        safe_key = escape(str(key))
+        if isinstance(value, dict):
+            OutputFormatter.print_info(f"{prefix}{safe_key}:")
+            _render_event_fields(value, indent + 1)
+        elif isinstance(value, list):
+            OutputFormatter.print_info(f"{prefix}{safe_key}:")
+            for item in value:
+                if not _has_renderable_content(item):
+                    continue
+                if isinstance(item, dict):
+                    OutputFormatter.print_info(f"{prefix}  -")
+                    _render_event_fields(item, indent + 2)
+                else:
+                    OutputFormatter.print_info(f"{prefix}  - {escape(str(item))}")
+        else:
+            OutputFormatter.print_info(f"{prefix}{safe_key}: {escape(str(value))}")

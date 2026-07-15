@@ -16,6 +16,8 @@ from herds_cli.core.base import (
     extract_user_id_from_session,
     display_events_summary,
     APIResponseHandler,
+    _has_renderable_content,
+    _render_event_fields,
 )
 from herds_cli.core.config import Config
 from herds_cli.core.exceptions import (
@@ -399,6 +401,154 @@ class TestDisplayEventDetails:
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
         assert "2026-08-01 at 7:00 PM" in out
+
+    def test_full_event_data_dump_appears_after_curated_header(self, capsys):
+        """The dump heading follows the curated block, so casual reads see
+        the friendly summary first."""
+        self._make_cmd().display_event_details(self.BASE_EVENT)
+        out = capsys.readouterr().err
+        assert "Full event data" in out
+        assert out.index("Category:") < out.index("Full event data")
+
+    def test_dump_includes_fields_the_header_omits(self, capsys):
+        """street_address and contact.website are modeled but not in the
+        curated header; the dump must surface them."""
+        event = {
+            **self.BASE_EVENT,
+            "location": {
+                "city": "Austin",
+                "state": "TX",
+                "street_address": "1300 South Blvd",
+            },
+            "contact": {
+                "organizer": "Live Nation",
+                "website": "https://example.com/gig",
+            },
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "street_address: 1300 South Blvd" in out
+        assert "website: https://example.com/gig" in out
+
+    def test_dump_includes_unmodeled_server_fields(self, capsys):
+        """Fields absent from the EventV2 TypedDict still appear: the walker
+        reads the live dict, so new server fields need no CLI change."""
+        event = {**self.BASE_EVENT, "confidence_score": 0.97}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "confidence_score: 0.97" in out
+
+    def test_dump_omits_none_and_empty_fields(self, capsys):
+        """None/empty fields stay out of the dump (the curated header is
+        unchanged and may still print 'Category: None')."""
+        event = {**self.BASE_EVENT, "event_description": None, "tags": []}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        dump = out[out.index("Full event data"):]
+        assert "event_description" not in dump
+        assert "tags" not in dump
+
+
+class TestRenderEventFields:
+    """Unit tests for the recursive full-event-data walker.
+
+    The walker prints every populated field of the live event dict via
+    OutputFormatter.print_info (stderr), so new server fields appear
+    without a CLI change. Empty values are pruned recursively."""
+
+    def test_scalar_fields_render_indented(self, capsys):
+        _render_event_fields({"title": "Game Night", "id": "abc123"})
+        err = capsys.readouterr().err
+        assert "  title: Game Night" in err
+        assert "  id: abc123" in err
+
+    def test_nested_dict_recurses_with_deeper_indent(self, capsys):
+        _render_event_fields(
+            {"location": {"city": "Charlotte", "street_address": "1300 South Blvd"}}
+        )
+        err = capsys.readouterr().err
+        assert "  location:" in err
+        assert "    city: Charlotte" in err
+        assert "    street_address: 1300 South Blvd" in err
+
+    def test_none_and_empty_values_omitted(self, capsys):
+        _render_event_fields(
+            {
+                "title": "Kept",
+                "category_level_1": None,
+                "notes": "",
+                "tags": [],
+                "extra": {},
+            }
+        )
+        err = capsys.readouterr().err
+        assert "title: Kept" in err
+        assert "category_level_1" not in err
+        assert "notes" not in err
+        assert "tags" not in err
+        assert "extra" not in err
+
+    def test_dict_of_all_empty_values_omitted_entirely(self, capsys):
+        """A nested dict whose members are all empty must not leave a
+        dangling 'contact:' heading with nothing under it."""
+        _render_event_fields(
+            {"title": "Kept", "contact": {"email": None, "phone": ""}}
+        )
+        err = capsys.readouterr().err
+        assert "title: Kept" in err
+        assert "contact" not in err
+
+    def test_falsy_but_meaningful_values_kept(self, capsys):
+        """0 and False are real data (price: 0, is_free: False), not emptiness."""
+        _render_event_fields({"price": 0, "recurring": False})
+        err = capsys.readouterr().err
+        assert "  price: 0" in err
+        assert "  recurring: False" in err
+
+    def test_list_of_scalars_renders_as_dash_items(self, capsys):
+        _render_event_fields({"tags": ["music", "outdoor"]})
+        err = capsys.readouterr().err
+        assert "  tags:" in err
+        assert "    - music" in err
+        assert "    - outdoor" in err
+
+    def test_list_of_dicts_recurses(self, capsys):
+        _render_event_fields(
+            {"occurrences": [{"date": "2026-07-13"}, {"date": "2026-07-20"}]}
+        )
+        err = capsys.readouterr().err
+        assert "  occurrences:" in err
+        assert "date: 2026-07-13" in err
+        assert "date: 2026-07-20" in err
+
+    def test_has_renderable_content_predicate(self):
+        assert _has_renderable_content("x") is True
+        assert _has_renderable_content(0) is True
+        assert _has_renderable_content(False) is True
+        assert _has_renderable_content(None) is False
+        assert _has_renderable_content("") is False
+        assert _has_renderable_content({}) is False
+        assert _has_renderable_content([]) is False
+        assert _has_renderable_content({"a": None, "b": ""}) is False
+        assert _has_renderable_content({"a": {"b": "deep"}}) is True
+        assert _has_renderable_content([None, ""]) is False
+        assert _has_renderable_content([None, "x"]) is True
+
+    def test_markup_like_values_render_literally_without_crashing(self, capsys):
+        """Server values are arbitrary text; Rich markup in them must be
+        escaped, not interpreted. An unmatched closing tag would otherwise
+        raise MarkupError and abort the command."""
+        _render_event_fields(
+            {
+                "description": "see [/red] tag",
+                "notes": ["[bold]not bold[/bold]"],
+                "nested": {"[key]": "[red]literal[/red]"},
+            }
+        )
+        err = capsys.readouterr().err
+        assert "see [/red] tag" in err
+        assert "[bold]not bold[/bold]" in err
+        assert "[red]literal[/red]" in err
 
 
 class TestAPIResponseHandler:
