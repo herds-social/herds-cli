@@ -105,6 +105,11 @@ def test_parse_pyproject():
     assert parse_pyproject(text) == ("4.3.0", ["click>=8.0"])
 
 
+def test_parse_pyproject_missing_dependencies_key():
+    text = '[project]\nname = "herds-cli"\nversion = "4.3.0"\n'
+    assert parse_pyproject(text) == ("4.3.0", [])
+
+
 def test_parse_init_version():
     assert parse_init_version('"""doc"""\n__version__ = "4.3.0"\n') == "4.3.0"
 

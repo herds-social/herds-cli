@@ -1,3 +1,12 @@
+# Automated release pipeline. Runs on every push to main: `check` reads the
+# version from source, then `release` and `tap-bump` each run only when their
+# output (the GitHub Release, the tap formula) is missing or stale, so the
+# whole workflow is idempotent and safe to re-run after a partial failure.
+# The cli-v<version> tag is created BY the release job, never by hand; the
+# tag trigger and workflow_dispatch exist as manual recovery paths. A tag
+# created by the release job does not re-trigger this workflow because events
+# from the default GITHUB_TOKEN never trigger workflows - do not "fix" the
+# release step to use a PAT, that would enable recursive runs.
 name: Release CLI
 
 on:
@@ -10,6 +19,9 @@ on:
 permissions:
   contents: write
 
+# Serialize releases; queue (never cancel) so an in-flight release can't be
+# killed mid-upload, which would create exactly the half-finished state
+# tap-bump exists to repair.
 concurrency:
   group: release-cli
   cancel-in-progress: false
@@ -17,11 +29,16 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Output contract: version is X.Y.Z; release_exists and formula_current
+    # are the literal strings "true"/"false". Downstream `if:` comparisons
+    # use == 'false' so a missing/renamed output fails closed (jobs skip).
     outputs:
       version: ${{ steps.state.outputs.version }}
       release_exists: ${{ steps.state.outputs.release_exists }}
       formula_current: ${{ steps.state.outputs.formula_current }}
     steps:
+      # Shallow checkout is fine here: --print-version reads two files and
+      # runs no git commands (unlike the PR guard in ci.yml).
       - uses: actions/checkout@v4
 
       - name: Determine release state
@@ -30,17 +47,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # The script's stdout is exactly the version string; it names the
+          # tag, the release assets, and the formula URL downstream.
           version=$(python3 scripts/version_guard.py --print-version)
+          test -n "$version"
           if gh release view "cli-v$version" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             release_exists=true
           else
             release_exists=false
           fi
-          formula=$(gh api repos/herds-social/homebrew-herds-cli/contents/Formula/herds.rb --jq '.content' | base64 -d)
-          if echo "$formula" | grep -q "/cli-v$version/"; then
-            formula_current=true
-          else
+          # The generated formula's url embeds /cli-v<version>/ (RELEASE_URL
+          # in scripts/generate_formula.py); its presence means the tap
+          # already ships this version. A 404 (formula not created yet) means
+          # stale; any other API failure (auth, network) fails the job.
+          gh_err=$(mktemp)
+          if content=$(gh api repos/herds-social/homebrew-herds-cli/contents/Formula/herds.rb --jq '.content' 2> "$gh_err"); then
+            formula=$(echo "$content" | base64 -d)
+            if echo "$formula" | grep -q "/cli-v$version/"; then
+              formula_current=true
+            else
+              formula_current=false
+            fi
+          elif grep -q "HTTP 404" "$gh_err"; then
             formula_current=false
+          else
+            cat "$gh_err" >&2
+            exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "release_exists=$release_exists" >> "$GITHUB_OUTPUT"
@@ -73,6 +105,12 @@ jobs:
 
   tap-bump:
     needs: [check, release]
+    # always() is required: without it this job auto-skips whenever `release`
+    # skips. But a skipped `release` is a normal state (the GitHub Release
+    # already exists from an earlier run that died before updating the tap),
+    # and this job is the recovery path for it - so it runs for both
+    # release==success and release==skipped, and never when release failed
+    # or check failed.
     if: >-
       always() &&
       needs.check.result == 'success' &&
@@ -88,6 +126,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      # herds_cli (underscore) is PEP 625 normalization of the project name
+      # herds-cli, as emitted by `python -m build` and mirrored by RELEASE_URL
+      # in scripts/generate_formula.py.
       - name: Download release sdist
         env:
           GH_TOKEN: ${{ github.token }}
@@ -107,11 +148,15 @@ jobs:
             --sdist-path "sdist/herds_cli-$VERSION.tar.gz" \
             --output herds.rb
 
+      # TAP_PUSH_TOKEN: repo secret holding a PAT with contents:write on
+      # herds-social/homebrew-herds-cli. The default github.token is scoped
+      # to this repo and cannot push cross-repo.
       - name: Push formula to tap
         env:
           TAP_PUSH_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
         run: |
           set -euo pipefail
+          : "${TAP_PUSH_TOKEN:?TAP_PUSH_TOKEN secret is not set}"
           git clone "https://x-access-token:${TAP_PUSH_TOKEN}@github.com/herds-social/homebrew-herds-cli.git" tap
           cp herds.rb tap/Formula/herds.rb
           cd tap
@@ -123,4 +168,6 @@ jobs:
           fi
           git add Formula/herds.rb
           git commit -m "herds $VERSION"
+          # One rebase retry in case another writer pushed to the tap since
+          # the clone above.
           git push origin main || { git pull --rebase origin main && git push origin main; }

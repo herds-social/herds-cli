@@ -10,6 +10,16 @@ Compares HEAD against the merge base with the base branch and enforces:
 - changes under herds_cli/ or to [project] dependencies require a bump
 - the version must never decrease
 - tag cli-v<head version> must not already exist on origin
+
+Also the release pipeline's version source: release-cli.yml's check job runs
+`--print-version`, which verifies the two version files agree and writes the
+version to stdout. That stdout is captured into a job output that names the
+tag, the release assets, and the formula URL, so the --print-version path must
+never print anything else to stdout (errors go to stderr).
+
+Both CI call sites invoke this script with the runner's system python3 and no
+dependency install: it must stay stdlib-only, and tomllib pins it to
+Python >= 3.11.
 """
 
 from __future__ import annotations
@@ -28,7 +38,10 @@ PYPROJECT_PATH = "pyproject.toml"
 def parse_pyproject(text: str) -> tuple[str, list[str]]:
     """Return (version, dependencies) from pyproject.toml text."""
     project = tomllib.loads(text)["project"]
-    return project["version"], list(project["dependencies"])
+    version = project["version"]
+    if not isinstance(version, str):
+        raise ValueError("pyproject.toml [project].version must be a string")
+    return version, list(project.get("dependencies", []))
 
 
 def parse_init_version(text: str) -> str:

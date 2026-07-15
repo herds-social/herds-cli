@@ -39,12 +39,17 @@ jobs:
         run: uv run pytest
 
   version-guard:
+    # PR-only: the guard diffs against github.base_ref, which is empty on push.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          # Full history: the guard runs `git merge-base` and
+          # `git show <merge-base>:pyproject.toml`, which fail on shallow clones.
           fetch-depth: 0
 
+      # Runner's system python3 (>= 3.11 for tomllib); the script is
+      # deliberately stdlib-only so no dependency install is needed.
       - name: Enforce version bump rules
         run: python3 scripts/version_guard.py --base "origin/${{ github.base_ref }}"

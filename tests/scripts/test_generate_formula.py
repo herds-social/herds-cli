@@ -6,6 +6,7 @@ import pytest
 
 from scripts.generate_formula import (
     ResourceInfo,
+    environment_problems,
     fetch_sdist_info,
     normalize,
     render_formula,
@@ -36,6 +37,20 @@ class FakeSession:
 def test_normalize_is_pep503():
     assert normalize("ruamel.yaml") == "ruamel-yaml"
     assert normalize("Foo__Bar") == "foo-bar"
+
+
+def test_environment_problems_accepts_clean_release_venv():
+    assert environment_problems({"herds-cli", "click", "requests"}) == []
+
+
+def test_environment_problems_rejects_missing_cli():
+    problems = environment_problems({"click", "requests"})
+    assert any("not installed" in p for p in problems)
+
+
+def test_environment_problems_rejects_dev_venv():
+    problems = environment_problems({"herds-cli", "click", "pytest", "pyright"})
+    assert any("dev tools installed (pyright, pytest)" in p for p in problems)
 
 
 def test_select_resource_dists_excludes_self_and_tooling():

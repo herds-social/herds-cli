@@ -23,9 +23,17 @@ import sys
 from dataclasses import dataclass
 from importlib import metadata
 from string import Template
+from typing import TypedDict
 
+# Available in the release venv only because requests is a herds-cli runtime
+# dependency; this script installs nothing of its own.
 import requests
 
+# The sdist filename uses herds_cli (underscore): PEP 625 normalization of the
+# project name herds-cli, as produced by `python -m build`. The same name is
+# used by the `gh release download --pattern` step in release-cli.yml, and the
+# /cli-v<version>/ path segment is what release-cli.yml's check job greps for
+# to decide whether the tap formula is already current.
 RELEASE_URL = (
     "https://github.com/herds-social/herds-cli/releases/download/"
     "cli-v{version}/herds_cli-{version}.tar.gz"
@@ -69,6 +77,14 @@ RESOURCE_TEMPLATE = Template(
 )
 
 
+class PyPIUrlEntry(TypedDict):
+    """One entry of the PyPI JSON API's ``urls`` array (fields we consume)."""
+
+    packagetype: str  # "sdist" or "bdist_wheel"
+    url: str
+    digests: dict[str, str]
+
+
 @dataclass
 class ResourceInfo:
     name: str
@@ -93,12 +109,31 @@ def select_resource_dists(
     return sorted(kept, key=lambda pair: normalize(pair[0]))
 
 
-def installed_dependencies() -> list[tuple[str, str]]:
-    pairs = [
-        (dist.metadata["Name"], dist.version)
+def installed_distributions() -> list[tuple[str, str]]:
+    """(name, version) of everything in the running interpreter's environment.
+
+    The resource list mirrors this interpreter, so the script must run inside
+    the clean release venv built by release-cli.yml, never a dev environment.
+    """
+    return [
+        (name, dist.version)
         for dist in metadata.distributions()
+        if (name := dist.metadata["Name"]) is not None
     ]
-    return select_resource_dists(pairs)
+
+
+def environment_problems(installed_names: set[str]) -> list[str]:
+    """Reject interpreters that would produce a wrong formula (pure check)."""
+    problems: list[str] = []
+    if "herds-cli" not in installed_names:
+        problems.append("herds-cli is not installed in this interpreter")
+    dev_markers = sorted({"pytest", "pyright"} & installed_names)
+    if dev_markers:
+        problems.append(
+            f"dev tools installed ({', '.join(dev_markers)}); "
+            "run inside the clean release venv, not a dev environment"
+        )
+    return problems
 
 
 def fetch_sdist_info(
@@ -107,7 +142,8 @@ def fetch_sdist_info(
     url = PYPI_JSON_URL.format(name=name, version=version)
     response = http.get(url, timeout=30)
     response.raise_for_status()
-    for entry in response.json()["urls"]:
+    entries: list[PyPIUrlEntry] = response.json()["urls"]
+    for entry in entries:
         if entry["packagetype"] == "sdist":
             return ResourceInfo(
                 name=name,
@@ -148,10 +184,17 @@ def main() -> int:
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
+    distributions = installed_distributions()
+    problems = environment_problems({normalize(name) for name, _ in distributions})
+    if problems:
+        for problem in problems:
+            print(f"error: {problem}", file=sys.stderr)
+        return 1
+
     with requests.Session() as http:
         resources = [
             fetch_sdist_info(name, version, http)
-            for name, version in installed_dependencies()
+            for name, version in select_resource_dists(distributions)
         ]
     formula = render_formula(
         args.version, sha256_file(args.sdist_path), resources
