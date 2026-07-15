@@ -90,9 +90,15 @@ def test_source_and_dependency_change_reason_mentions_both():
     ]
 
 
-def test_existing_tag_fails():
-    failures = run_guard(tag_exists=True)
+def test_existing_tag_with_bump_fails():
+    failures = run_guard(
+        head_version="4.3.1", init_version="4.3.1", tag_exists=True
+    )
     assert any("already exists" in f for f in failures)
+
+
+def test_existing_tag_without_bump_passes():
+    assert run_guard(tag_exists=True) == []
 
 
 def test_parse_pyproject():

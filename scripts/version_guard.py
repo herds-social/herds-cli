@@ -9,7 +9,9 @@ Compares HEAD against the merge base with the base branch and enforces:
 - pyproject.toml and herds_cli/__init__.py must agree on the version
 - changes under herds_cli/ or to [project] dependencies require a bump
 - the version must never decrease
-- tag cli-v<head version> must not already exist on origin
+- when the version was bumped, tag cli-v<head version> must not already
+  exist on origin (an unbumped PR's version is already released, so its
+  tag legitimately exists)
 
 Also the release pipeline's version source: release-cli.yml's check job runs
 `--print-version`, which verifies the two version files agree and writes the
@@ -79,7 +81,10 @@ def check_guard(
     mismatch = version_mismatch(head_version, init_version)
     if mismatch is not None:
         failures.append(mismatch)
-    if tag_exists:
+    # Only a bumped version proposes a new tag; an unbumped PR's version is
+    # already released and its tag is supposed to exist.
+    version_bumped = version_key(head_version) > version_key(base_version)
+    if tag_exists and version_bumped:
         failures.append(f"tag cli-v{head_version} already exists on origin")
     if version_key(head_version) < version_key(base_version):
         failures.append(
