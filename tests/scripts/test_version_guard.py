@@ -6,6 +6,7 @@ from scripts.version_guard import (
     check_guard,
     parse_init_version,
     parse_pyproject,
+    verified_head_version,
     version_key,
 )
 
@@ -68,6 +69,27 @@ def test_version_backwards_fails():
     assert any("backwards" in f for f in failures)
 
 
+def test_backwards_with_source_change_reports_once():
+    failures = run_guard(
+        head_version="4.2.0",
+        init_version="4.2.0",
+        changed_files=["herds_cli/cli.py"],
+    )
+    assert len(failures) == 1
+    assert "backwards" in failures[0]
+
+
+def test_source_and_dependency_change_reason_mentions_both():
+    failures = run_guard(
+        changed_files=["herds_cli/cli.py", "pyproject.toml"],
+        head_dependencies=BASE_DEPS + ["pytz>=2023.3"],
+    )
+    assert failures == [
+        "herds_cli/ source and dependencies changed but the version was "
+        "not bumped (base 4.3.0, head 4.3.0)"
+    ]
+
+
 def test_existing_tag_fails():
     failures = run_guard(tag_exists=True)
     assert any("already exists" in f for f in failures)
@@ -94,3 +116,17 @@ def test_parse_init_version_missing_raises():
 
 def test_version_key_orders_numerically():
     assert version_key("4.10.0") > version_key("4.9.9")
+
+
+PYPROJECT_TEXT = '[project]\nname = "x"\nversion = "4.3.0"\ndependencies = []\n'
+
+
+def test_verified_head_version_agreement():
+    init_text = '__version__ = "4.3.0"\n'
+    assert verified_head_version(PYPROJECT_TEXT, init_text) == "4.3.0"
+
+
+def test_verified_head_version_mismatch_raises():
+    init_text = '__version__ = "4.2.0"\n'
+    with pytest.raises(ValueError, match="mismatch"):
+        verified_head_version(PYPROJECT_TEXT, init_text)

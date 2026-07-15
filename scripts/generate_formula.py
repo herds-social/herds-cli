@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 import sys
 from dataclasses import dataclass
 from importlib import metadata
@@ -76,7 +77,8 @@ class ResourceInfo:
 
 
 def normalize(name: str) -> str:
-    return name.lower().replace("_", "-")
+    """PEP 503 name normalization (runs of ``-_.`` collapse to one ``-``)."""
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 def select_resource_dists(
@@ -99,9 +101,11 @@ def installed_dependencies() -> list[tuple[str, str]]:
     return select_resource_dists(pairs)
 
 
-def fetch_sdist_info(name: str, version: str) -> ResourceInfo:
+def fetch_sdist_info(
+    name: str, version: str, http: requests.Session
+) -> ResourceInfo:
     url = PYPI_JSON_URL.format(name=name, version=version)
-    response = requests.get(url, timeout=30)
+    response = http.get(url, timeout=30)
     response.raise_for_status()
     for entry in response.json()["urls"]:
         if entry["packagetype"] == "sdist":
@@ -144,10 +148,11 @@ def main() -> int:
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
-    resources = [
-        fetch_sdist_info(name, version)
-        for name, version in installed_dependencies()
-    ]
+    with requests.Session() as http:
+        resources = [
+            fetch_sdist_info(name, version, http)
+            for name, version in installed_dependencies()
+        ]
     formula = render_formula(
         args.version, sha256_file(args.sdist_path), resources
     )

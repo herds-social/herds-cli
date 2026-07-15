@@ -4,9 +4,10 @@ import hashlib
 
 import pytest
 
-from scripts import generate_formula
 from scripts.generate_formula import (
     ResourceInfo,
+    fetch_sdist_info,
+    normalize,
     render_formula,
     select_resource_dists,
     sha256_file,
@@ -22,6 +23,19 @@ class FakeResponse:
 
     def json(self):
         return self.payload
+
+
+class FakeSession:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def get(self, url, timeout):
+        return FakeResponse(self.payload)
+
+
+def test_normalize_is_pep503():
+    assert normalize("ruamel.yaml") == "ruamel-yaml"
+    assert normalize("Foo__Bar") == "foo-bar"
 
 
 def test_select_resource_dists_excludes_self_and_tooling():
@@ -48,7 +62,7 @@ def test_select_resource_dists_sorts_case_insensitively():
     ]
 
 
-def test_fetch_sdist_info_picks_the_sdist(monkeypatch):
+def test_fetch_sdist_info_picks_the_sdist():
     payload = {
         "urls": [
             {
@@ -63,12 +77,7 @@ def test_fetch_sdist_info_picks_the_sdist(monkeypatch):
             },
         ]
     }
-    monkeypatch.setattr(
-        generate_formula.requests,
-        "get",
-        lambda url, timeout: FakeResponse(payload),
-    )
-    info = generate_formula.fetch_sdist_info("click", "8.2.1")
+    info = fetch_sdist_info("click", "8.2.1", FakeSession(payload))
     assert info == ResourceInfo(
         name="click",
         url="https://files.pythonhosted.org/x/click-8.2.1.tar.gz",
@@ -76,7 +85,7 @@ def test_fetch_sdist_info_picks_the_sdist(monkeypatch):
     )
 
 
-def test_fetch_sdist_info_without_sdist_raises(monkeypatch):
+def test_fetch_sdist_info_without_sdist_raises():
     payload = {
         "urls": [
             {
@@ -86,13 +95,8 @@ def test_fetch_sdist_info_without_sdist_raises(monkeypatch):
             }
         ]
     }
-    monkeypatch.setattr(
-        generate_formula.requests,
-        "get",
-        lambda url, timeout: FakeResponse(payload),
-    )
     with pytest.raises(RuntimeError, match="no sdist"):
-        generate_formula.fetch_sdist_info("click", "8.2.1")
+        fetch_sdist_info("click", "8.2.1", FakeSession(payload))
 
 
 def test_sha256_file(tmp_path):
