@@ -47,6 +47,8 @@ jobs:
       # Shallow checkout is fine here: --print-version reads three files and
       # runs no git commands (unlike the PR guard in ci.yml).
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:

@@ -151,7 +151,7 @@ def test_version_key_orders_numerically():
 
 def test_version_key_rejects_malformed_versions():
     for bad in ("4.3", "4.3.0.1", "4.3.", "4.03.0", "4.3.0rc1", ""):
-        with pytest.raises(ValueError, match="X.Y.Z"):
+        with pytest.raises(ValueError, match=r"X\.Y\.Z"):
             version_key(bad)
 
 
@@ -186,5 +186,5 @@ def test_verified_head_version_mismatch_raises():
 def test_verified_head_version_stale_lock_raises():
     init_text = '__version__ = "4.3.0"\n'
     stale_lock = '[[package]]\nname = "herds-cli"\nversion = "4.2.0"\n'
-    with pytest.raises(ValueError, match="uv.lock"):
+    with pytest.raises(ValueError, match=r"uv\.lock"):
         verified_head_version(PYPROJECT_TEXT, init_text, stale_lock)

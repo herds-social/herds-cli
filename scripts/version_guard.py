@@ -14,8 +14,8 @@ Compares HEAD against the merge base with the base branch and enforces:
   tag legitimately exists)
 
 Also the release pipeline's version source: release-cli.yml's check job runs
-`--print-version`, which verifies the two version files agree and writes the
-version to stdout. That stdout is captured into a job output that names the
+`--print-version`, which verifies all three version sources agree and writes
+the version to stdout. That stdout is captured into a job output that names the
 tag, the release assets, and the formula URL, so the --print-version path must
 never print anything else to stdout (errors go to stderr).
 
@@ -141,6 +141,9 @@ def verified_head_version(
     mismatches = version_mismatches(head_version, init_version, lock_version)
     if mismatches:
         raise ValueError("; ".join(mismatches))
+    # The stdout of --print-version names the tag, assets, and formula URL;
+    # reject malformed shapes before they propagate.
+    version_key(head_version)
     return head_version
 
 
