@@ -21,8 +21,10 @@ on:
       - "cli-v*"
   workflow_dispatch:
 
+# Read-only by default; only the release job needs to write (tag + Release).
+# The tap push uses TAP_PUSH_TOKEN, not this token.
 permissions:
-  contents: write
+  contents: read
 
 # Serialize releases; queue (never cancel) so an in-flight release can't be
 # killed mid-upload, which would create exactly the half-finished state
@@ -42,9 +44,13 @@ jobs:
       release_exists: ${{ steps.state.outputs.release_exists }}
       formula_current: ${{ steps.state.outputs.formula_current }}
     steps:
-      # Shallow checkout is fine here: --print-version reads two files and
+      # Shallow checkout is fine here: --print-version reads three files and
       # runs no git commands (unlike the PR guard in ci.yml).
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Determine release state
         id: state
@@ -95,6 +101,8 @@ jobs:
     needs: check
     if: needs.check.outputs.release_exists == 'false'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 

@@ -5,11 +5,16 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   pyright:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -26,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -48,8 +55,13 @@ jobs:
           # Full history: the guard runs `git merge-base` and
           # `git show <merge-base>:pyproject.toml`, which fail on shallow clones.
           fetch-depth: 0
+          persist-credentials: false
 
-      # Runner's system python3 (>= 3.11 for tomllib); the script is
-      # deliberately stdlib-only so no dependency install is needed.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The script is deliberately stdlib-only (tomllib needs >= 3.11), so no
+      # dependency install is needed.
       - name: Enforce version bump rules
         run: python3 scripts/version_guard.py --base "origin/${{ github.base_ref }}"

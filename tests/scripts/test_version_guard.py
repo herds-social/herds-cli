@@ -5,6 +5,7 @@ import pytest
 from scripts.version_guard import (
     check_guard,
     parse_init_version,
+    parse_lock_version,
     parse_pyproject,
     verified_head_version,
     version_key,
@@ -18,6 +19,7 @@ def run_guard(**overrides):
         base_version="4.3.0",
         head_version="4.3.0",
         init_version="4.3.0",
+        lock_version="4.3.0",
         changed_files=["README.md"],
         base_dependencies=BASE_DEPS,
         head_dependencies=BASE_DEPS,
@@ -42,6 +44,7 @@ def test_source_change_with_bump_passes():
             changed_files=["herds_cli/cli.py", "pyproject.toml"],
             head_version="4.3.1",
             init_version="4.3.1",
+            lock_version="4.3.1",
         )
         == []
     )
@@ -60,12 +63,25 @@ def test_version_file_mismatch_fails():
         changed_files=["herds_cli/cli.py"],
         head_version="4.3.1",
         init_version="4.3.0",
+        lock_version="4.3.1",
     )
     assert any("mismatch" in f for f in failures)
 
 
+def test_stale_lockfile_fails():
+    failures = run_guard(
+        changed_files=["herds_cli/cli.py", "pyproject.toml"],
+        head_version="4.3.1",
+        init_version="4.3.1",
+        lock_version="4.3.0",
+    )
+    assert any("uv.lock" in f for f in failures)
+
+
 def test_version_backwards_fails():
-    failures = run_guard(head_version="4.2.0", init_version="4.2.0")
+    failures = run_guard(
+        head_version="4.2.0", init_version="4.2.0", lock_version="4.2.0"
+    )
     assert any("backwards" in f for f in failures)
 
 
@@ -73,6 +89,7 @@ def test_backwards_with_source_change_reports_once():
     failures = run_guard(
         head_version="4.2.0",
         init_version="4.2.0",
+        lock_version="4.2.0",
         changed_files=["herds_cli/cli.py"],
     )
     assert len(failures) == 1
@@ -92,7 +109,10 @@ def test_source_and_dependency_change_reason_mentions_both():
 
 def test_existing_tag_with_bump_fails():
     failures = run_guard(
-        head_version="4.3.1", init_version="4.3.1", tag_exists=True
+        head_version="4.3.1",
+        init_version="4.3.1",
+        lock_version="4.3.1",
+        tag_exists=True,
     )
     assert any("already exists" in f for f in failures)
 
@@ -129,15 +149,42 @@ def test_version_key_orders_numerically():
     assert version_key("4.10.0") > version_key("4.9.9")
 
 
+def test_version_key_rejects_malformed_versions():
+    for bad in ("4.3", "4.3.0.1", "4.3.", "4.03.0", "4.3.0rc1", ""):
+        with pytest.raises(ValueError, match="X.Y.Z"):
+            version_key(bad)
+
+
+def test_parse_lock_version():
+    text = (
+        '[[package]]\nname = "click"\nversion = "8.2.1"\n\n'
+        '[[package]]\nname = "herds-cli"\nversion = "4.3.0"\n'
+    )
+    assert parse_lock_version(text) == "4.3.0"
+
+
+def test_parse_lock_version_missing_package_raises():
+    with pytest.raises(ValueError, match="herds-cli"):
+        parse_lock_version('[[package]]\nname = "click"\nversion = "8.2.1"\n')
+
+
 PYPROJECT_TEXT = '[project]\nname = "x"\nversion = "4.3.0"\ndependencies = []\n'
+LOCK_TEXT = '[[package]]\nname = "herds-cli"\nversion = "4.3.0"\n'
 
 
 def test_verified_head_version_agreement():
     init_text = '__version__ = "4.3.0"\n'
-    assert verified_head_version(PYPROJECT_TEXT, init_text) == "4.3.0"
+    assert verified_head_version(PYPROJECT_TEXT, init_text, LOCK_TEXT) == "4.3.0"
 
 
 def test_verified_head_version_mismatch_raises():
     init_text = '__version__ = "4.2.0"\n'
     with pytest.raises(ValueError, match="mismatch"):
-        verified_head_version(PYPROJECT_TEXT, init_text)
+        verified_head_version(PYPROJECT_TEXT, init_text, LOCK_TEXT)
+
+
+def test_verified_head_version_stale_lock_raises():
+    init_text = '__version__ = "4.3.0"\n'
+    stale_lock = '[[package]]\nname = "herds-cli"\nversion = "4.2.0"\n'
+    with pytest.raises(ValueError, match="uv.lock"):
+        verified_head_version(PYPROJECT_TEXT, init_text, stale_lock)

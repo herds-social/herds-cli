@@ -6,7 +6,7 @@ Run from the repository root in CI:
 
 Compares HEAD against the merge base with the base branch and enforces:
 
-- pyproject.toml and herds_cli/__init__.py must agree on the version
+- pyproject.toml, herds_cli/__init__.py, and uv.lock must agree on the version
 - changes under herds_cli/ or to [project] dependencies require a bump
 - the version must never decrease
 - when the version was bumped, tag cli-v<head version> must not already
@@ -35,6 +35,9 @@ import tomllib
 SOURCE_PREFIX = "herds_cli/"
 INIT_PATH = "herds_cli/__init__.py"
 PYPROJECT_PATH = "pyproject.toml"
+LOCK_PATH = "uv.lock"
+# Strict X.Y.Z; the tag format and release asset names assume exactly this.
+VERSION_RE = re.compile(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)")
 
 
 def parse_pyproject(text: str) -> tuple[str, list[str]]:
@@ -53,34 +56,52 @@ def parse_init_version(text: str) -> str:
     return match.group(1)
 
 
+def parse_lock_version(text: str) -> str:
+    """Return the herds-cli version pinned in uv.lock text."""
+    for package in tomllib.loads(text).get("package", []):
+        if package.get("name") == "herds-cli":
+            return package["version"]
+    raise ValueError(f"herds-cli not found in {LOCK_PATH}")
+
+
 def version_key(version: str) -> tuple[int, ...]:
+    if VERSION_RE.fullmatch(version) is None:
+        raise ValueError(f"version must be exactly X.Y.Z (got {version!r})")
     return tuple(int(part) for part in version.split("."))
 
 
-def version_mismatch(head_version: str, init_version: str) -> str | None:
-    """One shared mismatch rule for the PR guard and the release check."""
+def version_mismatches(
+    head_version: str, init_version: str, lock_version: str
+) -> list[str]:
+    """Shared three-way agreement rule for the PR guard and release check."""
+    mismatches: list[str] = []
     if head_version != init_version:
-        return (
+        mismatches.append(
             f"version mismatch: pyproject.toml has {head_version}, "
             f"{INIT_PATH} has {init_version}"
         )
-    return None
+    if head_version != lock_version:
+        mismatches.append(
+            f"version mismatch: pyproject.toml has {head_version}, "
+            f"{LOCK_PATH} has {lock_version}"
+        )
+    return mismatches
 
 
 def check_guard(
     base_version: str,
     head_version: str,
     init_version: str,
+    lock_version: str,
     changed_files: list[str],
     base_dependencies: list[str],
     head_dependencies: list[str],
     tag_exists: bool,
 ) -> list[str]:
     """Return failure messages; empty means the PR passes the guard."""
-    failures: list[str] = []
-    mismatch = version_mismatch(head_version, init_version)
-    if mismatch is not None:
-        failures.append(mismatch)
+    failures: list[str] = list(
+        version_mismatches(head_version, init_version, lock_version)
+    )
     # Only a bumped version proposes a new tag; an unbumped PR's version is
     # already released and its tag is supposed to exist.
     version_bumped = version_key(head_version) > version_key(base_version)
@@ -110,13 +131,16 @@ def check_guard(
     return failures
 
 
-def verified_head_version(pyproject_text: str, init_text: str) -> str:
-    """Return the version once both version files agree; raise otherwise."""
+def verified_head_version(
+    pyproject_text: str, init_text: str, lock_text: str
+) -> str:
+    """Return the version once all three version files agree; raise otherwise."""
     head_version, _ = parse_pyproject(pyproject_text)
     init_version = parse_init_version(init_text)
-    mismatch = version_mismatch(head_version, init_version)
-    if mismatch is not None:
-        raise ValueError(mismatch)
+    lock_version = parse_lock_version(lock_text)
+    mismatches = version_mismatches(head_version, init_version, lock_version)
+    if mismatches:
+        raise ValueError("; ".join(mismatches))
     return head_version
 
 
@@ -141,10 +165,12 @@ def main() -> int:
         pyproject_text = f.read()
     with open(INIT_PATH, encoding="utf-8") as f:
         init_text = f.read()
+    with open(LOCK_PATH, encoding="utf-8") as f:
+        lock_text = f.read()
 
     if args.print_version:
         try:
-            print(verified_head_version(pyproject_text, init_text))
+            print(verified_head_version(pyproject_text, init_text, lock_text))
         except ValueError as error:
             print(f"::error::{error}", file=sys.stderr)
             return 1
@@ -157,6 +183,7 @@ def main() -> int:
     )
     head_version, head_deps = parse_pyproject(pyproject_text)
     init_version = parse_init_version(init_text)
+    lock_version = parse_lock_version(lock_text)
     tag_ref = f"refs/tags/cli-v{head_version}"
     tag_exists = bool(_git("ls-remote", "--tags", "origin", tag_ref).strip())
 
@@ -164,6 +191,7 @@ def main() -> int:
         base_version=base_version,
         head_version=head_version,
         init_version=init_version,
+        lock_version=lock_version,
         changed_files=changed_files,
         base_dependencies=base_deps,
         head_dependencies=head_deps,
