@@ -23,14 +23,16 @@ Source installs via `uv tool` remain the supported path for unreleased worktrees
 ## How releases connect to the formula
 
 ```text
-tag cli-vX.Y.Z on herds-cli main
-    → release-cli.yml builds sdist + wheel
-    → GitHub Release assets
-    → update Formula/herds.rb url + sha256 (+ resources if deps changed)
-    → brew update && brew upgrade herds
+merge PR to main (version already bumped on the branch)
+    -> release-cli.yml check: detects release/formula staleness for the version
+    -> release: builds sdist + wheel, creates tag cli-vX.Y.Z + GitHub Release
+    -> tap-bump: regenerates Formula/herds.rb (url, sha256, resources) and pushes to tap main
+    -> brew update && brew upgrade herds
 ```
 
-CLI releases use tags matching `cli-v*` (for example `cli-v4.2.1`). The workflow attaches `herds_cli-<version>.tar.gz` and a wheel to each GitHub Release.
+CLI releases use tags matching `cli-v*` (for example `cli-v4.2.1`). The workflow attaches `herds_cli-<version>.tar.gz` and a wheel to each GitHub Release, then regenerates the tap formula from a clean virtualenv install of the package plus PyPI sdist metadata (`scripts/generate_formula.py`). Do not hand-edit `Formula/herds.rb` in the tap; the next release overwrites it.
+
+The pipeline is idempotent: re-running the workflow skips the release job when the release already exists and re-runs the tap job while the formula is stale. Merges that do not bump the version (docs-only, tests-only) are a green no-op. It requires the `TAP_PUSH_TOKEN` repository secret (PAT with contents write on `homebrew-herds-cli`).
 
 ## Formula layout
 
@@ -52,7 +54,9 @@ poet click requests rich pytz tzlocal
 
 (`poet herds-cli` works only after the package is published to PyPI; until then, generate resources per runtime dependency.)
 
-## Per-release checklist
+## Manual fallback (automation unavailable)
+
+Releases are normally fully automated by `release-cli.yml` on merge to `main`. Use these steps only when the automation is unavailable.
 
 1. Bump version in `pyproject.toml`, `herds_cli/__init__.py`, and `uv.lock` on the release branch; merge to `main`.
 2. Tag and push:
