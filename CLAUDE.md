@@ -29,6 +29,7 @@ Tests live under `tests/`:
 
 - `tests/unit/` — unit tests for individual modules (api, config, images, helpers, types/oauth)
 - `tests/cli/` — Click CliRunner tests that invoke commands end-to-end with mocked HTTP
+- `tests/scripts/` - tests for the release/CI tooling under `scripts/` (version guard, formula generator)
 
 CLI tests inject a fully-built `ctx.obj` via `CliRunner.invoke(..., obj=cli_obj)` and rely on the `_initialized` guard in `cli.cli()` to skip config loading. Shared fixtures (`mock_api_client`, `mock_session_manager`, `cli_obj`) are in `tests/cli/conftest.py` and `tests/unit/conftest.py`.
 
@@ -80,4 +81,4 @@ Documentation-only and test-only branches do not require a bump.
 
 ## Release
 
-Tags matching `cli-v*` trigger the GitHub Actions release workflow (`.github/workflows/release-cli.yml`), which builds with `python -m build` and creates a GitHub Release.
+Releases are automated. Merging a PR to `main` whose branch bumped the version triggers `.github/workflows/release-cli.yml`: it builds with `python -m build`, creates tag `cli-vX.Y.Z` plus a GitHub Release, and regenerates and pushes `Formula/herds.rb` in the `homebrew-herds-cli` tap (`scripts/generate_formula.py`). Merges without a version bump release nothing. CI runs `scripts/version_guard.py` on every PR and fails it when `herds_cli/` source or dependencies changed without a bump. Manually pushed `cli-v*` tags and `workflow_dispatch` run the same pipeline as a fallback.

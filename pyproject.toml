@@ -28,6 +28,6 @@ dev = [
 ]
 
 [tool.pyright]
-include = ["herds_cli"]
+include = ["herds_cli", "scripts"]
 typeCheckingMode = "basic"
 pythonVersion = "3.11"
