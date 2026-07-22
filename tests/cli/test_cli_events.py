@@ -5,6 +5,8 @@ Tests events list, get, and delete by injecting mock dependencies
 through the _initialized guard.
 """
 
+import json
+
 from unittest.mock import MagicMock
 
 from tests.cli.conftest import strip_ansi
@@ -93,6 +95,38 @@ class TestEventsList:
         assert "Summer Concert" in strip_ansi(result.output)
         assert "2026-07-15" in strip_ansi(result.output)
         assert "(id evt-001)" in strip_ansi(result.output).replace("\n", "")
+
+    def test_list_events_summary_text_leaves_stdout_empty(self, cli_runner, cli_obj, mock_session_manager):
+        """--summary rows are status output: stderr in text mode, stdout clean.
+
+        The injected config (not the --format flag, which the _initialized
+        guard bypasses) selects the output format.
+        """
+        _create_session(mock_session_manager)
+        _mock_json_response(cli_obj["api_client"], [SAMPLE_EVENT])
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
+
+        result = cli_runner.invoke(
+            cli, ["events", "list", "--summary"], obj=cli_obj
+        )
+
+        assert result.exit_code == 0
+        assert strip_ansi(result.stdout) == ""
+        assert "Summer Concert" in strip_ansi(result.stderr)
+
+    def test_list_events_summary_json_emits_json_on_stdout(self, cli_runner, cli_obj, mock_session_manager):
+        """--summary respects json mode: the API response lands on stdout."""
+        _create_session(mock_session_manager)
+        _mock_json_response(cli_obj["api_client"], [SAMPLE_EVENT])
+
+        result = cli_runner.invoke(
+            cli, ["events", "list", "--summary"], obj=cli_obj
+        )
+
+        assert result.exit_code == 0
+        parsed = json.loads(strip_ansi(result.stdout))
+        assert parsed[0]["id"] == "evt-001"
 
     def test_list_events_summary_renders_parent_title(self, cli_runner, cli_obj, mock_session_manager):
         """--summary surfaces parent_title as an indented sub-line below the event row."""

@@ -56,7 +56,7 @@ def events() -> None:
 @click.option(
     "--summary",
     is_flag=True,
-    help="Show a concise summary (title, date, time) instead of the full JSON response",
+    help="Show a concise summary (title, date, time, id) instead of the full field listing",
 )
 @click.pass_context
 def list_events(
@@ -108,14 +108,12 @@ def list_events(
     OutputFormatter.print_success(f"Successfully retrieved {len(events)} events")
 
     if summary:
-        # Show concise summary only — no JSON blob
         _display_concise_summary(events)
     else:
-        # Display events summary
         display_events_summary(events)
 
-        # Output formatted response
-        APIResponseHandler.format_and_output(result, cmd.output_format)
+    # Data channel: JSON dump on stdout in json mode, nothing in text mode.
+    APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
 @events.command()
@@ -442,7 +440,10 @@ def _build_event_update_data(
 
 
 def _display_concise_summary(events: list[EventV2]) -> None:
-    """Display a concise summary of events showing title, date, and time.
+    """Display a concise summary of events showing title, date, time, and id.
+
+    Rows go to stderr via OutputFormatter like all human-readable output;
+    the data channel (stdout) stays owned by format_and_output.
 
     Args:
         events: List of event dictionaries (v2 format)
@@ -490,6 +491,6 @@ def _display_concise_summary(events: list[EventV2]) -> None:
         if event_id:
             line += f"  (id {event_id})"
 
-        click.echo(line)
+        OutputFormatter.print_info(line)
         if parent_title:
-            click.echo(f"     Parent: {parent_title}")
+            OutputFormatter.print_info(f"     Parent: {parent_title}")
