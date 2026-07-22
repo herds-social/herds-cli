@@ -551,9 +551,10 @@ def _format_image_assets(assets: ImageAssetsV3) -> str:
             part = f"{name} (dimensions pending)"
         size_mb = variant.get("size_mb")
         if size_mb is not None:
-            # :g keeps small thumbnails honest (0.02MB, not the 0.0MB
-            # that :.1f would print).
-            part += f" ({size_mb:g}MB)"
+            # 3 significant digits: keeps small thumbnails honest (0.02MB,
+            # not the 0.0MB that :.1f would print) without the noise of
+            # full float precision (1.3MB, not 1.30192MB).
+            part += f" ({size_mb:.3g}MB)"
         parts.append(part)
     if not parts:
         return "(no renderable variants)"

@@ -666,6 +666,16 @@ class TestFormatImageAssets:
     def test_missing_variant_keys_treated_as_null(self):
         assert _format_image_assets({"image_id": "68a1"}) == "(no renderable variants)"
 
+    def test_size_rounds_to_three_significant_digits(self):
+        """Real server sizes carry full float precision (1.301923); the
+        display trims to 3 significant digits without zero-padding."""
+        assets = {
+            "original": {"url": None, "width": 10, "height": 20, "size_mb": 1.301923},
+            "resized": None,
+            "thumbnail": None,
+        }
+        assert _format_image_assets(assets) == "original 10x20 (1.3MB)"
+
 
 class TestAPIResponseHandler:
     def _make_response(self, status_code, json_data=None, text=""):
