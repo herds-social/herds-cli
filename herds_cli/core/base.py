@@ -5,7 +5,7 @@ This module contains shared base classes and helper functions used across
 all command modules.
 """
 
-from typing import Any, Dict, List, Mapping, Optional, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict
 
 import click
 import requests
@@ -17,7 +17,7 @@ from herds_cli.calendar_status_display import (
     render_calendar_status,
 )
 from herds_cli.core.config import Config
-from herds_cli.types import EventV2, ImageV2Response, SessionData
+from herds_cli.types import EventV2, ImageAssetsV3, ImageV2Response, SessionData
 from herds_cli.core.exceptions import (
     AmbiguousSessionError,
     APIRequestError,
@@ -325,7 +325,7 @@ class EventCommandBase(CommandBase):
         # Curated images summary from images_v3 (server PR #285). The full
         # dump below also prints the raw array; this block adds the null
         # semantics the dump cannot show (absent variant vs unmeasured).
-        images_v3 = event_data.get("images_v3") or []
+        images_v3 = event_data.get("images_v3")
         if images_v3:
             OutputFormatter.print_info(f"Images ({len(images_v3)}):")
             for i, assets in enumerate(images_v3, 1):
@@ -515,21 +515,20 @@ def display_events_summary(events: List[EventV2]) -> None:
         OutputFormatter.print_info(f"  ... and {len(events) - 5} more events")
 
 
-_IMAGE_VARIANT_NAMES = ("original", "resized", "thumbnail")
-
-
-def _format_image_assets(assets: Mapping[str, Any]) -> str:
+def _format_image_assets(assets: ImageAssetsV3) -> str:
     """Format one images_v3 entry as a single human-readable line.
 
-    A None variant does not exist and is omitted. A present variant with
-    null dimensions exists but was never measured and renders as
-    '(dimensions pending)'. A null url with present dimensions is normal
-    (the server clears original.url on list/get endpoints), so url is
-    never consulted here.
+    The two-level null contract lives on ImageAssetsV3/ImageVariantV3 in
+    types.py. url is never consulted here: a null url with present
+    dimensions is normal, so url presence must not signal existence.
     """
+    variants = (
+        ("original", assets.get("original")),
+        ("resized", assets.get("resized")),
+        ("thumbnail", assets.get("thumbnail")),
+    )
     parts = []
-    for name in _IMAGE_VARIANT_NAMES:
-        variant = assets.get(name)
+    for name, variant in variants:
         if variant is None:
             continue
         width = variant.get("width")
@@ -540,6 +539,8 @@ def _format_image_assets(assets: Mapping[str, Any]) -> str:
             part = f"{name} (dimensions pending)"
         size_mb = variant.get("size_mb")
         if size_mb is not None:
+            # :g keeps small thumbnails honest (0.02MB, not the 0.0MB
+            # that :.1f would print).
             part += f" ({size_mb:g}MB)"
         parts.append(part)
     if not parts:

@@ -28,6 +28,15 @@ from herds_cli.core.exceptions import (
     UserIdNotFoundError,
 )
 
+# One fully-measured images_v3 entry (see ImageAssetsV3 in herds_cli/types.py
+# for the contract), shared by the formatter and display tests.
+SAMPLE_IMAGES_V3_ENTRY = {
+    "image_id": "68a1",
+    "original": {"url": None, "width": 4284, "height": 5712, "size_mb": 4.2},
+    "resized": {"url": "https://x/r", "width": 1500, "height": 2000, "size_mb": 0.9},
+    "thumbnail": {"url": "https://x/t", "width": 202, "height": 270, "size_mb": 0.02},
+}
+
 
 class TestGetOrDetectSessionEmail:
     def test_explicit_email_returned_directly(self, mock_session_manager):
@@ -408,14 +417,7 @@ class TestDisplayEventDetails:
         placed after the calendar status and before the full dump."""
         event = {
             **self.BASE_EVENT,
-            "images_v3": [
-                {
-                    "image_id": "68a1",
-                    "original": {"url": None, "width": 4284, "height": 5712, "size_mb": 4.2},
-                    "resized": {"url": "https://x/r", "width": 1500, "height": 2000, "size_mb": 0.9},
-                    "thumbnail": None,
-                }
-            ],
+            "images_v3": [{**SAMPLE_IMAGES_V3_ENTRY, "thumbnail": None}],
         }
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
@@ -601,22 +603,11 @@ class TestRenderEventFields:
 
 
 class TestFormatImageAssets:
-    """Unit tests for the images_v3 per-entry formatter.
-
-    Contract (server PR herds-social/herds#285): a null variant means the
-    asset does not exist; a present variant with null dimensions exists but
-    was never measured; a null url with present dimensions is normal (the
-    server clears original.url on list/get endpoints)."""
-
-    FULL_ASSETS = {
-        "image_id": "68a1",
-        "original": {"url": None, "width": 4284, "height": 5712, "size_mb": 4.2},
-        "resized": {"url": "https://x/r", "width": 1500, "height": 2000, "size_mb": 0.9},
-        "thumbnail": {"url": "https://x/t", "width": 202, "height": 270, "size_mb": 0.02},
-    }
+    """Unit tests for the images_v3 per-entry formatter (contract details
+    on ImageAssetsV3/ImageVariantV3 in herds_cli/types.py)."""
 
     def test_all_variants_measured(self):
-        line = _format_image_assets(self.FULL_ASSETS)
+        line = _format_image_assets(SAMPLE_IMAGES_V3_ENTRY)
         assert line == (
             "original 4284x5712 (4.2MB), "
             "resized 1500x2000 (0.9MB), "
@@ -624,7 +615,7 @@ class TestFormatImageAssets:
         )
 
     def test_null_variant_omitted(self):
-        assets = {**self.FULL_ASSETS, "thumbnail": None}
+        assets = {**SAMPLE_IMAGES_V3_ENTRY, "thumbnail": None}
         line = _format_image_assets(assets)
         assert "thumbnail" not in line
         assert "original" in line and "resized" in line
