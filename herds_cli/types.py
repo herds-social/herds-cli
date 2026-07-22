@@ -156,6 +156,35 @@ class EventUserData(TypedDict, total=False):
     calendar_add_error: str
 
 
+class ImageVariantV3(TypedDict, total=False):
+    """One renderable asset in an event's images_v3 array.
+
+    width/height are the oriented (post-EXIF) pixel dimensions of this
+    specific asset. They are None for assets stored before dimensions were
+    captured, which is not an error. url may be None while dimensions are
+    present: the server clears original.url on list/get endpoints.
+    """
+
+    url: Optional[str]
+    width: Optional[int]
+    height: Optional[int]
+    size_mb: Optional[float]
+
+
+class ImageAssetsV3(TypedDict, total=False):
+    """One source image and its processed variants (images_v3 entry).
+
+    A None variant means that asset does not exist (resize failed, or no
+    thumbnail was generated). Distinct from a present variant with null
+    dimensions, which exists but was never measured.
+    """
+
+    image_id: Optional[str]
+    original: Optional[ImageVariantV3]
+    resized: Optional[ImageVariantV3]
+    thumbnail: Optional[ImageVariantV3]
+
+
 class EventV2(TypedDict, total=False):
     """Event object from the v2 API (/api/events/v2).
 
@@ -172,6 +201,7 @@ class EventV2(TypedDict, total=False):
     location: LocationInfo
     contact: ContactInfo
     user_data: EventUserData
+    images_v3: List[ImageAssetsV3]
 
 
 # ---------------------------------------------------------------------------

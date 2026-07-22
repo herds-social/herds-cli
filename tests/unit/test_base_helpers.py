@@ -16,6 +16,7 @@ from herds_cli.core.base import (
     extract_user_id_from_session,
     display_events_summary,
     APIResponseHandler,
+    _format_image_assets,
     _has_renderable_content,
     _render_event_fields,
 )
@@ -549,6 +550,70 @@ class TestRenderEventFields:
         assert "see [/red] tag" in err
         assert "[bold]not bold[/bold]" in err
         assert "[red]literal[/red]" in err
+
+
+class TestFormatImageAssets:
+    """Unit tests for the images_v3 per-entry formatter.
+
+    Contract (server PR herds-social/herds#285): a null variant means the
+    asset does not exist; a present variant with null dimensions exists but
+    was never measured; a null url with present dimensions is normal (the
+    server clears original.url on list/get endpoints)."""
+
+    FULL_ASSETS = {
+        "image_id": "68a1",
+        "original": {"url": None, "width": 4284, "height": 5712, "size_mb": 4.2},
+        "resized": {"url": "https://x/r", "width": 1500, "height": 2000, "size_mb": 0.9},
+        "thumbnail": {"url": "https://x/t", "width": 202, "height": 270, "size_mb": 0.02},
+    }
+
+    def test_all_variants_measured(self):
+        line = _format_image_assets(self.FULL_ASSETS)
+        assert line == (
+            "original 4284x5712 (4.2MB), "
+            "resized 1500x2000 (0.9MB), "
+            "thumbnail 202x270 (0.02MB)"
+        )
+
+    def test_null_variant_omitted(self):
+        assets = {**self.FULL_ASSETS, "thumbnail": None}
+        line = _format_image_assets(assets)
+        assert "thumbnail" not in line
+        assert "original" in line and "resized" in line
+
+    def test_unmeasured_variant_marked_pending_not_absent(self):
+        assets = {
+            "image_id": "68a1",
+            "original": None,
+            "resized": {"url": "https://x/r", "width": None, "height": None, "size_mb": None},
+            "thumbnail": None,
+        }
+        assert _format_image_assets(assets) == "resized (dimensions pending)"
+
+    def test_null_url_with_dimensions_still_renders(self):
+        """URL presence is not an existence signal: the server strips
+        original.url on list/get while keeping its dimensions."""
+        assets = {
+            "original": {"url": None, "width": 100, "height": 200, "size_mb": None},
+            "resized": None,
+            "thumbnail": None,
+        }
+        assert _format_image_assets(assets) == "original 100x200"
+
+    def test_all_variants_null(self):
+        assets = {"image_id": "68a1", "original": None, "resized": None, "thumbnail": None}
+        assert _format_image_assets(assets) == "(no renderable variants)"
+
+    def test_missing_variant_keys_treated_as_null(self):
+        assert _format_image_assets({"image_id": "68a1"}) == "(no renderable variants)"
+
+    def test_size_omitted_when_null(self):
+        assets = {
+            "original": {"url": "https://x/o", "width": 10, "height": 20, "size_mb": None},
+            "resized": None,
+            "thumbnail": None,
+        }
+        assert _format_image_assets(assets) == "original 10x20"
 
 
 class TestAPIResponseHandler:

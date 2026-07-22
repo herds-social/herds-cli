@@ -506,6 +506,38 @@ def display_events_summary(events: List[EventV2]) -> None:
         OutputFormatter.print_info(f"  ... and {len(events) - 5} more events")
 
 
+_IMAGE_VARIANT_NAMES = ("original", "resized", "thumbnail")
+
+
+def _format_image_assets(assets: Dict[str, Any]) -> str:
+    """Format one images_v3 entry as a single human-readable line.
+
+    A None variant does not exist and is omitted. A present variant with
+    null dimensions exists but was never measured and renders as
+    '(dimensions pending)'. A null url with present dimensions is normal
+    (the server clears original.url on list/get endpoints), so url is
+    never consulted here.
+    """
+    parts = []
+    for name in _IMAGE_VARIANT_NAMES:
+        variant = assets.get(name)
+        if variant is None:
+            continue
+        width = variant.get("width")
+        height = variant.get("height")
+        if width is not None and height is not None:
+            part = f"{name} {width}x{height}"
+        else:
+            part = f"{name} (dimensions pending)"
+        size_mb = variant.get("size_mb")
+        if size_mb is not None:
+            part += f" ({size_mb:g}MB)"
+        parts.append(part)
+    if not parts:
+        return "(no renderable variants)"
+    return ", ".join(parts)
+
+
 def _has_renderable_content(value: Any) -> bool:
     """True if `value` would produce at least one line in the full-event dump.
 
