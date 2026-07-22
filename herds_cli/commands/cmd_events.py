@@ -482,10 +482,13 @@ def _display_concise_summary(events: list[EventV2]) -> None:
             if time_end:
                 time_display += f"–{time_end}"
 
-        # Build line
+        # Build line; the id is the join key to `herds events get <event_id>`.
         line = f"  {i}. {title}  |  {date_display}"
         if time_display:
             line += f"  {time_display}"
+        event_id = event.get("id")
+        if event_id:
+            line += f"  (id {event_id})"
 
         click.echo(line)
         if parent_title:

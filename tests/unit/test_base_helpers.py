@@ -212,7 +212,9 @@ class TestDisplayEventsSummary:
         assert "Austin, TX" in captured.err
         assert "Blue Note" in captured.err
 
-    def test_truncates_at_five(self, capsys):
+    def test_shows_all_fetched_events(self, capsys):
+        """The server already paginates via --limit/--offset; the text view
+        must render every event it was given, with no client-side cap."""
         events = [
             {"title": f"Event {i}", "date_info": {"raw": {"date": "2026-01-01"}}}
             for i in range(8)
@@ -221,9 +223,27 @@ class TestDisplayEventsSummary:
         display_events_summary(events)
         captured = capsys.readouterr()
         assert "Event 0" in captured.err
-        assert "Event 4" in captured.err
-        assert "Event 5" not in captured.err
-        assert "3 more events" in captured.err
+        assert "Event 7" in captured.err
+        assert "more events" not in captured.err
+
+    def test_rows_include_event_id(self, capsys):
+        """Each row carries the event id, the join key to `events get`."""
+        events = [{
+            "id": "68a1b2c3d4e5f6a7b8c9d0e1",
+            "title": "Jazz Night",
+            "date_info": {"raw": {"date": "2026-06-15"}},
+        }]
+        display_events_summary(events)
+        # Join wrapped lines: the Rich console soft-wraps at its width, which
+        # can split the id suffix across lines in the captured output.
+        out = capsys.readouterr().err.replace("\n", "")
+        assert "(id 68a1b2c3d4e5f6a7b8c9d0e1)" in out
+
+    def test_no_id_suffix_when_id_absent(self, capsys):
+        events = [{"title": "Minimal Event"}]
+        display_events_summary(events)
+        out = capsys.readouterr().err
+        assert "(id" not in out
 
     def test_handles_missing_fields(self, capsys):
         events = [{"title": "Minimal Event"}]

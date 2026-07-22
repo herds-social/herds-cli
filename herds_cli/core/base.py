@@ -465,6 +465,10 @@ def extract_user_id_from_session(session_manager: SessionManager, email: str) ->
 def display_events_summary(events: List[EventV2]) -> None:
     """Display a formatted summary of events.
 
+    Renders every event it is given: pagination is the server's job
+    (--limit/--offset), so a client-side cap would silently hide rows the
+    user asked for.
+
     Args:
         events: List of event dictionaries (v2 format)
     """
@@ -473,7 +477,7 @@ def display_events_summary(events: List[EventV2]) -> None:
         return
 
     OutputFormatter.print_info("Events Summary:")
-    for i, event in enumerate(events[:5], 1):  # Show first 5
+    for i, event in enumerate(events, 1):
         parent_title = event.get("parent_title")
         title = event.get("title", "Untitled")
         category = event.get("category_level_1", "Unknown category")
@@ -513,12 +517,15 @@ def display_events_summary(events: List[EventV2]) -> None:
 
         display_info = f"{display_date}{location_display}{organizer_display}"
 
-        OutputFormatter.print_info(f"  {i}. {title} - {display_info} ({category})")
+        # The id suffix is the join key to `herds events get <event_id>`.
+        event_id = event.get("id")
+        id_suffix = f" (id {escape(str(event_id))})" if event_id else ""
+
+        OutputFormatter.print_info(
+            f"  {i}. {title} - {display_info} ({category}){id_suffix}"
+        )
         if parent_title:
             OutputFormatter.print_info(f"     Parent: {parent_title}")
-
-    if len(events) > 5:
-        OutputFormatter.print_info(f"  ... and {len(events) - 5} more events")
 
 
 def _format_image_assets(assets: ImageAssetsV3) -> str:

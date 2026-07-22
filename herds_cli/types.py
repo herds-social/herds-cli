@@ -200,6 +200,7 @@ class EventV2(TypedDict, total=False):
     additional fields not listed here.
     """
 
+    id: str
     parent_title: str
     title: str
     category_level_1: str

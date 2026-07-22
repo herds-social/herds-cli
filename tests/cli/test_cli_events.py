@@ -60,6 +60,8 @@ class TestEventsList:
         assert result.exit_code == 0
         assert "Successfully retrieved 1 events" in strip_ansi(result.output)
         assert "Summer Concert" in strip_ansi(result.output)
+        # Join wrapped lines: Rich soft-wraps, which can split the id suffix.
+        assert "(id evt-001)" in strip_ansi(result.output).replace("\n", "")
 
     def test_list_events_no_session(self, cli_runner, cli_obj):
         """List events with no session exits with error."""
@@ -90,6 +92,7 @@ class TestEventsList:
         assert result.exit_code == 0
         assert "Summer Concert" in strip_ansi(result.output)
         assert "2026-07-15" in strip_ansi(result.output)
+        assert "(id evt-001)" in strip_ansi(result.output).replace("\n", "")
 
     def test_list_events_summary_renders_parent_title(self, cli_runner, cli_obj, mock_session_manager):
         """--summary surfaces parent_title as an indented sub-line below the event row."""
