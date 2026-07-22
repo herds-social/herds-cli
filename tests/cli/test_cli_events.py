@@ -128,6 +128,20 @@ class TestEventsList:
         parsed = json.loads(strip_ansi(result.stdout))
         assert parsed[0]["id"] == "evt-001"
 
+    def test_list_events_summary_escapes_markup_in_server_strings(self, cli_runner, cli_obj, mock_session_manager):
+        """A title containing Rich markup must render literally, not crash
+        or restyle the output (rows go through the Rich console now)."""
+        _create_session(mock_session_manager)
+        event = {**SAMPLE_EVENT, "title": "see [/red] tag"}
+        _mock_json_response(cli_obj["api_client"], [event])
+
+        result = cli_runner.invoke(
+            cli, ["events", "list", "--summary"], obj=cli_obj
+        )
+
+        assert result.exit_code == 0
+        assert "see [/red] tag" in strip_ansi(result.output).replace("\n", "")
+
     def test_list_events_summary_renders_parent_title(self, cli_runner, cli_obj, mock_session_manager):
         """--summary surfaces parent_title as an indented sub-line below the event row."""
         _create_session(mock_session_manager)

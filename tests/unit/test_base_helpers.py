@@ -245,6 +245,20 @@ class TestDisplayEventsSummary:
         out = capsys.readouterr().err
         assert "(id" not in out
 
+    def test_markup_like_values_render_literally(self, capsys):
+        """Server strings are arbitrary text; Rich markup in them must be
+        escaped, not interpreted (an unmatched closing tag would raise
+        MarkupError and abort the command)."""
+        events = [{
+            "title": "see [/red] tag",
+            "parent_title": "[bold]not bold[/bold]",
+            "date_info": {"raw": {"date": "2026-01-01"}},
+        }]
+        display_events_summary(events)
+        out = capsys.readouterr().err.replace("\n", "")
+        assert "see [/red] tag" in out
+        assert "[bold]not bold[/bold]" in out
+
     def test_handles_missing_fields(self, capsys):
         events = [{"title": "Minimal Event"}]
         display_events_summary(events)

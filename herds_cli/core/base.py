@@ -521,11 +521,14 @@ def display_events_summary(events: List[EventV2]) -> None:
         event_id = event.get("id")
         id_suffix = f" (id {escape(str(event_id))})" if event_id else ""
 
+        # Server strings are arbitrary text; escape so bracketed values
+        # render literally instead of being read as Rich markup.
         OutputFormatter.print_info(
-            f"  {i}. {title} - {display_info} ({category}){id_suffix}"
+            f"  {i}. {escape(str(title))} - {escape(display_info)} "
+            f"({escape(str(category))}){id_suffix}"
         )
         if parent_title:
-            OutputFormatter.print_info(f"     Parent: {parent_title}")
+            OutputFormatter.print_info(f"     Parent: {escape(str(parent_title))}")
 
 
 def _format_image_assets(assets: ImageAssetsV3) -> str:

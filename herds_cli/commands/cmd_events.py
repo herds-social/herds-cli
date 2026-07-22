@@ -9,6 +9,8 @@ import sys
 
 from typing import Any, Optional, cast
 
+from rich.markup import escape
+
 from herds_cli.output import OutputFormatter
 from herds_cli.core.base import (
     APIResponseHandler,
@@ -484,13 +486,15 @@ def _display_concise_summary(events: list[EventV2]) -> None:
                 time_display += f"–{time_end}"
 
         # Build line; the id is the join key to `herds events get <event_id>`.
-        line = f"  {i}. {title}  |  {date_display}"
+        # Server strings are arbitrary text; escape so bracketed values
+        # render literally instead of being read as Rich markup.
+        line = f"  {i}. {escape(str(title))}  |  {escape(date_display)}"
         if time_display:
-            line += f"  {time_display}"
+            line += f"  {escape(time_display)}"
         event_id = event.get("id")
         if event_id:
-            line += f"  (id {event_id})"
+            line += f"  (id {escape(str(event_id))})"
 
         OutputFormatter.print_info(line)
         if parent_title:
-            OutputFormatter.print_info(f"     Parent: {parent_title}")
+            OutputFormatter.print_info(f"     Parent: {escape(str(parent_title))}")
