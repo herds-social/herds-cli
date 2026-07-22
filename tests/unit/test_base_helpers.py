@@ -403,6 +403,54 @@ class TestDisplayEventDetails:
         out = capsys.readouterr().err
         assert "2026-08-01 at 7:00 PM" in out
 
+    def test_images_block_renders_between_calendar_and_dump(self, capsys):
+        """images_v3 gets a curated block: one numbered line per image,
+        placed after the calendar status and before the full dump."""
+        event = {
+            **self.BASE_EVENT,
+            "images_v3": [
+                {
+                    "image_id": "68a1",
+                    "original": {"url": None, "width": 4284, "height": 5712, "size_mb": 4.2},
+                    "resized": {"url": "https://x/r", "width": 1500, "height": 2000, "size_mb": 0.9},
+                    "thumbnail": None,
+                }
+            ],
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Images (1):" in out
+        assert "1. original 4284x5712 (4.2MB), resized 1500x2000 (0.9MB)" in out
+        assert out.index("Images (1):") < out.index("Full event data")
+
+    def test_images_block_numbers_multiple_entries(self, capsys):
+        event = {
+            **self.BASE_EVENT,
+            "images_v3": [
+                {"original": {"url": "u1", "width": 10, "height": 20, "size_mb": None},
+                 "resized": None, "thumbnail": None},
+                {"original": None, "resized": None,
+                 "thumbnail": {"url": "u2", "width": None, "height": None, "size_mb": None}},
+            ],
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Images (2):" in out
+        assert "1. original 10x20" in out
+        assert "2. thumbnail (dimensions pending)" in out
+
+    def test_no_images_block_when_field_absent(self, capsys):
+        """Older servers send no images_v3; output stays exactly as before."""
+        self._make_cmd().display_event_details(self.BASE_EVENT)
+        out = capsys.readouterr().err
+        assert "Images (" not in out
+
+    def test_no_images_block_when_empty_list(self, capsys):
+        event = {**self.BASE_EVENT, "images_v3": []}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Images (" not in out
+
     def test_full_event_data_dump_appears_after_curated_header(self, capsys):
         """The dump heading follows the curated block, so casual reads see
         the friendly summary first."""

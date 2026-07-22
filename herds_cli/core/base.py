@@ -5,7 +5,7 @@ This module contains shared base classes and helper functions used across
 all command modules.
 """
 
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Dict, List, Mapping, Optional, TypedDict
 
 import click
 import requests
@@ -322,6 +322,15 @@ class EventCommandBase(CommandBase):
                 else:
                     OutputFormatter.print_info(message)
 
+        # Curated images summary from images_v3 (server PR #285). The full
+        # dump below also prints the raw array; this block adds the null
+        # semantics the dump cannot show (absent variant vs unmeasured).
+        images_v3 = event_data.get("images_v3") or []
+        if images_v3:
+            OutputFormatter.print_info(f"Images ({len(images_v3)}):")
+            for i, assets in enumerate(images_v3, 1):
+                OutputFormatter.print_info(f"  {i}. {_format_image_assets(assets)}")
+
         # Exhaustive dump: walk the live dict so every server field is
         # visible, including ones EventV2 does not model.
         OutputFormatter.print_info("─── Full event data ───")
@@ -509,7 +518,7 @@ def display_events_summary(events: List[EventV2]) -> None:
 _IMAGE_VARIANT_NAMES = ("original", "resized", "thumbnail")
 
 
-def _format_image_assets(assets: Dict[str, Any]) -> str:
+def _format_image_assets(assets: Mapping[str, Any]) -> str:
     """Format one images_v3 entry as a single human-readable line.
 
     A None variant does not exist and is omitted. A present variant with

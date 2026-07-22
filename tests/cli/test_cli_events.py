@@ -122,6 +122,30 @@ class TestEventsList:
 
 
 class TestEventsGet:
+    def test_get_event_renders_images_v3_block(self, cli_runner, cli_obj, mock_session_manager):
+        """`events get` surfaces per-variant dimensions from images_v3."""
+        _create_session(mock_session_manager)
+        event = {
+            **SAMPLE_EVENT,
+            "images_v3": [
+                {
+                    "image_id": "68a1",
+                    "original": {"url": None, "width": 4284, "height": 5712, "size_mb": 4.2},
+                    "resized": {"url": "https://x/r", "width": 1500, "height": 2000, "size_mb": 0.9},
+                    "thumbnail": None,
+                }
+            ],
+        }
+        _mock_json_response(cli_obj["api_client"], event)
+
+        result = cli_runner.invoke(cli, ["events", "get", "evt-001"], obj=cli_obj)
+
+        assert result.exit_code == 0
+        out = strip_ansi(result.output)
+        assert "Images (1):" in out
+        assert "original 4284x5712 (4.2MB)" in out
+        assert "resized 1500x2000 (0.9MB)" in out
+
     def test_get_event_success(self, cli_runner, cli_obj, mock_session_manager):
         """Get event by ID shows event details."""
         _create_session(mock_session_manager)
