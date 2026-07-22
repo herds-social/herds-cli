@@ -160,9 +160,11 @@ class ImageVariantV3(TypedDict, total=False):
     """One renderable asset in an event's images_v3 array.
 
     width/height are the oriented (post-EXIF) pixel dimensions of this
-    specific asset. They are None for assets stored before dimensions were
-    captured, which is not an error. url may be None while dimensions are
-    present: the server clears original.url on list/get endpoints.
+    specific asset, set as a pair: a measurement yields both, so they are
+    both ints or both None. None means the asset was stored before
+    dimensions were captured, which is not an error. url may be None while
+    dimensions are present: the server clears original.url on list/get
+    endpoints.
     """
 
     url: Optional[str]
@@ -174,9 +176,14 @@ class ImageVariantV3(TypedDict, total=False):
 class ImageAssetsV3(TypedDict, total=False):
     """One source image and its processed variants (images_v3 entry).
 
+    Mirrors the server's ImageAssets schema on event read endpoints
+    (server PR herds-social/herds#285).
+
     A None variant means that asset does not exist (resize failed, or no
     thumbnail was generated). Distinct from a present variant with null
-    dimensions, which exists but was never measured.
+    dimensions, which exists but was never measured. A missing key is
+    equivalent to an explicit None; consumers should read variants via
+    .get() and treat both identically.
     """
 
     image_id: Optional[str]
