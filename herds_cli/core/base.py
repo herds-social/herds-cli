@@ -322,14 +322,20 @@ class EventCommandBase(CommandBase):
                 else:
                     OutputFormatter.print_info(message)
 
-        # Curated images summary from images_v3 (server PR #285). The full
-        # dump below also prints the raw array; this block adds the null
-        # semantics the dump cannot show (absent variant vs unmeasured).
+        # Curated images summary from images_v3 (server PR
+        # herds-social/herds#285). The full dump below also prints the raw
+        # array; this block adds the null semantics the dump cannot show
+        # (absent variant vs unmeasured). The id suffix is the join key to
+        # the `herds image <cmd> <image_id>` commands.
         images_v3 = event_data.get("images_v3")
         if images_v3:
             OutputFormatter.print_info(f"Images ({len(images_v3)}):")
             for i, assets in enumerate(images_v3, 1):
-                OutputFormatter.print_info(f"  {i}. {_format_image_assets(assets)}")
+                image_id = assets.get("image_id")
+                id_suffix = f" (id {escape(str(image_id))})" if image_id else ""
+                OutputFormatter.print_info(
+                    f"  {i}. {_format_image_assets(assets)}{id_suffix}"
+                )
 
         # Exhaustive dump: walk the live dict so every server field is
         # visible, including ones EventV2 does not model.
@@ -519,8 +525,7 @@ def _format_image_assets(assets: ImageAssetsV3) -> str:
     """Format one images_v3 entry as a single human-readable line.
 
     The two-level null contract lives on ImageAssetsV3/ImageVariantV3 in
-    types.py. url is never consulted here: a null url with present
-    dimensions is normal, so url presence must not signal existence.
+    types.py. url is deliberately never consulted here.
     """
     variants = (
         ("original", assets.get("original")),

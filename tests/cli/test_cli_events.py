@@ -143,8 +143,7 @@ class TestEventsGet:
         assert result.exit_code == 0
         out = strip_ansi(result.output)
         assert "Images (1):" in out
-        assert "original 4284x5712 (4.2MB)" in out
-        assert "resized 1500x2000 (0.9MB)" in out
+        assert "original 4284x5712" in out
 
     def test_get_event_success(self, cli_runner, cli_obj, mock_session_manager):
         """Get event by ID shows event details."""

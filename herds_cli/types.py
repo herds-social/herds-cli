@@ -163,8 +163,8 @@ class ImageVariantV3(TypedDict, total=False):
     specific asset, set as a pair: a measurement yields both, so they are
     both ints or both None. None means the asset was stored before
     dimensions were captured, which is not an error. url may be None while
-    dimensions are present: the server clears original.url on list/get
-    endpoints.
+    dimensions are present: on list/get endpoints the server clears
+    original.url unless originals are enabled by server config.
     """
 
     url: Optional[str]

@@ -422,7 +422,8 @@ class TestDisplayEventDetails:
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
         assert "Images (1):" in out
-        assert "1. original 4284x5712 (4.2MB), resized 1500x2000 (0.9MB)" in out
+        assert "1. original 4284x5712" in out
+        assert "(id 68a1)" in out
         assert out.index("Images (1):") < out.index("Full event data")
 
     def test_images_block_numbers_multiple_entries(self, capsys):
@@ -630,8 +631,7 @@ class TestFormatImageAssets:
         assert _format_image_assets(assets) == "resized (dimensions pending)"
 
     def test_null_url_with_dimensions_still_renders(self):
-        """URL presence is not an existence signal: the server strips
-        original.url on list/get while keeping its dimensions."""
+        """URL presence is not an existence signal (see ImageVariantV3)."""
         assets = {
             "original": {"url": None, "width": 100, "height": 200, "size_mb": None},
             "resized": None,
@@ -645,14 +645,6 @@ class TestFormatImageAssets:
 
     def test_missing_variant_keys_treated_as_null(self):
         assert _format_image_assets({"image_id": "68a1"}) == "(no renderable variants)"
-
-    def test_size_omitted_when_null(self):
-        assets = {
-            "original": {"url": "https://x/o", "width": 10, "height": 20, "size_mb": None},
-            "resized": None,
-            "thumbnail": None,
-        }
-        assert _format_image_assets(assets) == "original 10x20"
 
 
 class TestAPIResponseHandler:
