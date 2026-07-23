@@ -222,8 +222,8 @@ class TestDisplayEventsSummary:
 
         display_events_summary(events)
         captured = capsys.readouterr()
-        assert "Event 0" in captured.err
-        assert "Event 7" in captured.err
+        for i in range(8):
+            assert f"Event {i}" in captured.err
         assert "more events" not in captured.err
 
     def test_rows_include_event_id(self, capsys):
