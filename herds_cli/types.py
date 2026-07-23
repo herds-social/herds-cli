@@ -156,6 +156,42 @@ class EventUserData(TypedDict, total=False):
     calendar_add_error: str
 
 
+class ImageVariantV3(TypedDict, total=False):
+    """One renderable asset in an event's images_v3 array.
+
+    width/height are the oriented (post-EXIF) pixel dimensions of this
+    specific asset, set as a pair: a measurement yields both, so they are
+    both ints or both None. None means the asset was stored before
+    dimensions were captured, which is not an error. url may be None while
+    dimensions are present: on list/get endpoints the server clears
+    original.url unless originals are enabled by server config.
+    """
+
+    url: Optional[str]
+    width: Optional[int]
+    height: Optional[int]
+    size_mb: Optional[float]
+
+
+class ImageAssetsV3(TypedDict, total=False):
+    """One source image and its processed variants (images_v3 entry).
+
+    Mirrors the server's ImageAssets schema on event read endpoints
+    (server PR herds-social/herds#285).
+
+    A None variant means that asset does not exist (resize failed, or no
+    thumbnail was generated). Distinct from a present variant with null
+    dimensions, which exists but was never measured. A missing key is
+    equivalent to an explicit None; consumers should read variants via
+    .get() and treat both identically.
+    """
+
+    image_id: Optional[str]
+    original: Optional[ImageVariantV3]
+    resized: Optional[ImageVariantV3]
+    thumbnail: Optional[ImageVariantV3]
+
+
 class EventV2(TypedDict, total=False):
     """Event object from the v2 API (/api/events/v2).
 
@@ -164,6 +200,7 @@ class EventV2(TypedDict, total=False):
     additional fields not listed here.
     """
 
+    id: str
     parent_title: str
     title: str
     category_level_1: str
@@ -172,6 +209,7 @@ class EventV2(TypedDict, total=False):
     location: LocationInfo
     contact: ContactInfo
     user_data: EventUserData
+    images_v3: List[ImageAssetsV3]
 
 
 # ---------------------------------------------------------------------------

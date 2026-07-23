@@ -16,6 +16,7 @@ from herds_cli.core.base import (
     extract_user_id_from_session,
     display_events_summary,
     APIResponseHandler,
+    _format_image_assets,
     _has_renderable_content,
     _render_event_fields,
 )
@@ -26,6 +27,15 @@ from herds_cli.core.exceptions import (
     SessionNotFoundError,
     UserIdNotFoundError,
 )
+
+# One fully-measured images_v3 entry (see ImageAssetsV3 in herds_cli/types.py
+# for the contract), shared by the formatter and display tests.
+SAMPLE_IMAGES_V3_ENTRY = {
+    "image_id": "68a1",
+    "original": {"url": None, "width": 4284, "height": 5712, "size_mb": 4.2},
+    "resized": {"url": "https://x/r", "width": 1500, "height": 2000, "size_mb": 0.9},
+    "thumbnail": {"url": "https://x/t", "width": 202, "height": 270, "size_mb": 0.02},
+}
 
 
 class TestGetOrDetectSessionEmail:
@@ -202,7 +212,9 @@ class TestDisplayEventsSummary:
         assert "Austin, TX" in captured.err
         assert "Blue Note" in captured.err
 
-    def test_truncates_at_five(self, capsys):
+    def test_shows_all_fetched_events(self, capsys):
+        """The server already paginates via --limit/--offset; the text view
+        must render every event it was given, with no client-side cap."""
         events = [
             {"title": f"Event {i}", "date_info": {"raw": {"date": "2026-01-01"}}}
             for i in range(8)
@@ -210,10 +222,42 @@ class TestDisplayEventsSummary:
 
         display_events_summary(events)
         captured = capsys.readouterr()
-        assert "Event 0" in captured.err
-        assert "Event 4" in captured.err
-        assert "Event 5" not in captured.err
-        assert "3 more events" in captured.err
+        for i in range(8):
+            assert f"Event {i}" in captured.err
+        assert "more events" not in captured.err
+
+    def test_rows_include_event_id(self, capsys):
+        """Each row carries the event id, the join key to `events get`."""
+        events = [{
+            "id": "68a1b2c3d4e5f6a7b8c9d0e1",
+            "title": "Jazz Night",
+            "date_info": {"raw": {"date": "2026-06-15"}},
+        }]
+        display_events_summary(events)
+        # Join wrapped lines: the Rich console soft-wraps at its width, which
+        # can split the id suffix across lines in the captured output.
+        out = capsys.readouterr().err.replace("\n", "")
+        assert "(id 68a1b2c3d4e5f6a7b8c9d0e1)" in out
+
+    def test_no_id_suffix_when_id_absent(self, capsys):
+        events = [{"title": "Minimal Event"}]
+        display_events_summary(events)
+        out = capsys.readouterr().err
+        assert "(id" not in out
+
+    def test_markup_like_values_render_literally(self, capsys):
+        """Server strings are arbitrary text; Rich markup in them must be
+        escaped, not interpreted (an unmatched closing tag would raise
+        MarkupError and abort the command)."""
+        events = [{
+            "title": "see [/red] tag",
+            "parent_title": "[bold]not bold[/bold]",
+            "date_info": {"raw": {"date": "2026-01-01"}},
+        }]
+        display_events_summary(events)
+        out = capsys.readouterr().err.replace("\n", "")
+        assert "see [/red] tag" in out
+        assert "[bold]not bold[/bold]" in out
 
     def test_handles_missing_fields(self, capsys):
         events = [{"title": "Minimal Event"}]
@@ -402,6 +446,48 @@ class TestDisplayEventDetails:
         out = capsys.readouterr().err
         assert "2026-08-01 at 7:00 PM" in out
 
+    def test_images_block_renders_between_calendar_and_dump(self, capsys):
+        """images_v3 gets a curated block: one numbered line per image,
+        placed after the calendar status and before the full dump."""
+        event = {
+            **self.BASE_EVENT,
+            "images_v3": [{**SAMPLE_IMAGES_V3_ENTRY, "thumbnail": None}],
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Images (1):" in out
+        assert "1. original 4284x5712" in out
+        assert "(id 68a1)" in out
+        assert out.index("Images (1):") < out.index("Full event data")
+
+    def test_images_block_numbers_multiple_entries(self, capsys):
+        event = {
+            **self.BASE_EVENT,
+            "images_v3": [
+                {"original": {"url": "u1", "width": 10, "height": 20, "size_mb": None},
+                 "resized": None, "thumbnail": None},
+                {"original": None, "resized": None,
+                 "thumbnail": {"url": "u2", "width": None, "height": None, "size_mb": None}},
+            ],
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Images (2):" in out
+        assert "1. original 10x20" in out
+        assert "2. thumbnail (dimensions pending)" in out
+
+    def test_no_images_block_when_field_absent(self, capsys):
+        """Older servers send no images_v3; output stays exactly as before."""
+        self._make_cmd().display_event_details(self.BASE_EVENT)
+        out = capsys.readouterr().err
+        assert "Images (" not in out
+
+    def test_no_images_block_when_empty_list(self, capsys):
+        event = {**self.BASE_EVENT, "images_v3": []}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Images (" not in out
+
     def test_full_event_data_dump_appears_after_curated_header(self, capsys):
         """The dump heading follows the curated block, so casual reads see
         the friendly summary first."""
@@ -549,6 +635,60 @@ class TestRenderEventFields:
         assert "see [/red] tag" in err
         assert "[bold]not bold[/bold]" in err
         assert "[red]literal[/red]" in err
+
+
+class TestFormatImageAssets:
+    """Unit tests for the images_v3 per-entry formatter (contract details
+    on ImageAssetsV3/ImageVariantV3 in herds_cli/types.py)."""
+
+    def test_all_variants_measured(self):
+        line = _format_image_assets(SAMPLE_IMAGES_V3_ENTRY)
+        assert line == (
+            "original 4284x5712 (4.2MB), "
+            "resized 1500x2000 (0.9MB), "
+            "thumbnail 202x270 (0.02MB)"
+        )
+
+    def test_null_variant_omitted(self):
+        assets = {**SAMPLE_IMAGES_V3_ENTRY, "thumbnail": None}
+        line = _format_image_assets(assets)
+        assert "thumbnail" not in line
+        assert "original" in line and "resized" in line
+
+    def test_unmeasured_variant_marked_pending_not_absent(self):
+        assets = {
+            "image_id": "68a1",
+            "original": None,
+            "resized": {"url": "https://x/r", "width": None, "height": None, "size_mb": None},
+            "thumbnail": None,
+        }
+        assert _format_image_assets(assets) == "resized (dimensions pending)"
+
+    def test_null_url_with_dimensions_still_renders(self):
+        """URL presence is not an existence signal (see ImageVariantV3)."""
+        assets = {
+            "original": {"url": None, "width": 100, "height": 200, "size_mb": None},
+            "resized": None,
+            "thumbnail": None,
+        }
+        assert _format_image_assets(assets) == "original 100x200"
+
+    def test_all_variants_null(self):
+        assets = {"image_id": "68a1", "original": None, "resized": None, "thumbnail": None}
+        assert _format_image_assets(assets) == "(no renderable variants)"
+
+    def test_missing_variant_keys_treated_as_null(self):
+        assert _format_image_assets({"image_id": "68a1"}) == "(no renderable variants)"
+
+    def test_size_rounds_to_three_significant_digits(self):
+        """Real server sizes carry full float precision (1.301923); the
+        display trims to 3 significant digits without zero-padding."""
+        assets = {
+            "original": {"url": None, "width": 10, "height": 20, "size_mb": 1.301923},
+            "resized": None,
+            "thumbnail": None,
+        }
+        assert _format_image_assets(assets) == "original 10x20 (1.3MB)"
 
 
 class TestAPIResponseHandler:

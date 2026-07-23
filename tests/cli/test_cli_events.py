@@ -5,6 +5,8 @@ Tests events list, get, and delete by injecting mock dependencies
 through the _initialized guard.
 """
 
+import json
+
 from unittest.mock import MagicMock
 
 from tests.cli.conftest import strip_ansi
@@ -60,6 +62,8 @@ class TestEventsList:
         assert result.exit_code == 0
         assert "Successfully retrieved 1 events" in strip_ansi(result.output)
         assert "Summer Concert" in strip_ansi(result.output)
+        # Join wrapped lines: Rich soft-wraps, which can split the id suffix.
+        assert "(id evt-001)" in strip_ansi(result.output).replace("\n", "")
 
     def test_list_events_no_session(self, cli_runner, cli_obj):
         """List events with no session exits with error."""
@@ -90,6 +94,53 @@ class TestEventsList:
         assert result.exit_code == 0
         assert "Summer Concert" in strip_ansi(result.output)
         assert "2026-07-15" in strip_ansi(result.output)
+        assert "(id evt-001)" in strip_ansi(result.output).replace("\n", "")
+
+    def test_list_events_summary_text_leaves_stdout_empty(self, cli_runner, cli_obj, mock_session_manager):
+        """--summary rows are status output: stderr in text mode, stdout clean.
+
+        The injected config (not the --format flag, which the _initialized
+        guard bypasses) selects the output format.
+        """
+        _create_session(mock_session_manager)
+        _mock_json_response(cli_obj["api_client"], [SAMPLE_EVENT])
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
+
+        result = cli_runner.invoke(
+            cli, ["events", "list", "--summary"], obj=cli_obj
+        )
+
+        assert result.exit_code == 0
+        assert strip_ansi(result.stdout) == ""
+        assert "Summer Concert" in strip_ansi(result.stderr)
+
+    def test_list_events_summary_json_emits_json_on_stdout(self, cli_runner, cli_obj, mock_session_manager):
+        """--summary respects json mode: the API response lands on stdout."""
+        _create_session(mock_session_manager)
+        _mock_json_response(cli_obj["api_client"], [SAMPLE_EVENT])
+
+        result = cli_runner.invoke(
+            cli, ["events", "list", "--summary"], obj=cli_obj
+        )
+
+        assert result.exit_code == 0
+        parsed = json.loads(strip_ansi(result.stdout))
+        assert parsed[0]["id"] == "evt-001"
+
+    def test_list_events_summary_escapes_markup_in_server_strings(self, cli_runner, cli_obj, mock_session_manager):
+        """A title containing Rich markup must render literally, not crash
+        or restyle the output (rows go through the Rich console now)."""
+        _create_session(mock_session_manager)
+        event = {**SAMPLE_EVENT, "title": "see [/red] tag"}
+        _mock_json_response(cli_obj["api_client"], [event])
+
+        result = cli_runner.invoke(
+            cli, ["events", "list", "--summary"], obj=cli_obj
+        )
+
+        assert result.exit_code == 0
+        assert "see [/red] tag" in strip_ansi(result.output).replace("\n", "")
 
     def test_list_events_summary_renders_parent_title(self, cli_runner, cli_obj, mock_session_manager):
         """--summary surfaces parent_title as an indented sub-line below the event row."""
@@ -122,6 +173,29 @@ class TestEventsList:
 
 
 class TestEventsGet:
+    def test_get_event_renders_images_v3_block(self, cli_runner, cli_obj, mock_session_manager):
+        """`events get` surfaces per-variant dimensions from images_v3."""
+        _create_session(mock_session_manager)
+        event = {
+            **SAMPLE_EVENT,
+            "images_v3": [
+                {
+                    "image_id": "68a1",
+                    "original": {"url": None, "width": 4284, "height": 5712, "size_mb": 4.2},
+                    "resized": {"url": "https://x/r", "width": 1500, "height": 2000, "size_mb": 0.9},
+                    "thumbnail": None,
+                }
+            ],
+        }
+        _mock_json_response(cli_obj["api_client"], event)
+
+        result = cli_runner.invoke(cli, ["events", "get", "evt-001"], obj=cli_obj)
+
+        assert result.exit_code == 0
+        out = strip_ansi(result.output)
+        assert "Images (1):" in out
+        assert "original 4284x5712" in out
+
     def test_get_event_success(self, cli_runner, cli_obj, mock_session_manager):
         """Get event by ID shows event details."""
         _create_session(mock_session_manager)
