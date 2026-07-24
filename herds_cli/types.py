@@ -499,3 +499,37 @@ class AcknowledgeResponse(TypedDict):
     """Response from POST /api/extractions/acknowledge."""
 
     acknowledged_count: int
+
+
+class ShareResponse(TypedDict):
+    """Response from POST /api/extractions/{extraction_id}/share.
+
+    share_url is the absolute public share-page URL, built by the server
+    as <web-base>/s/<share_token>. share_token is exposed separately so
+    clients can rebuild the URL on another web base (see
+    `extractions share --web-url`).
+    """
+
+    share_token: str
+    share_url: str
+
+
+class ShareCommandOutput(ShareResponse, total=False):
+    """JSON payload of `herds extractions share`.
+
+    The verbatim server ShareResponse, plus local_share_url synthesized
+    by the CLI when --web-url is passed.
+    """
+
+    local_share_url: str
+
+
+class RevokeShareResponse(TypedDict):
+    """CLI-synthesized result for DELETE /api/extractions/{extraction_id}/share.
+
+    The server returns 204 with no body; the CLI synthesizes this shape for
+    json output, mirroring DeleteEventResponse.
+    """
+
+    extraction_id: str
+    revoked: bool

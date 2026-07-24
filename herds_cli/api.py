@@ -9,7 +9,8 @@ internally.
 Exceptions: login(), create_user(), and google_auth() authenticate directly
 and do not require a prior session.
 
-All error paths go through handle_api_error() which always raises (NoReturn).
+All error paths end in handle_api_error() (always raises, NoReturn); share
+endpoints first map 400/404 to tailored messages in _handle_share_error().
 
 Used by CommandBase (core/base.py) and ImageUploader (images.py).
 """
@@ -33,7 +34,9 @@ from .types import (
     ExtractionListResponse,
     ExtractionResponse,
     LoginResponse,
+    RevokeShareResponse,
     SessionData,
+    ShareResponse,
     UpdatePasswordResponse,
     UrlSubmissionResponse,
     UsageResponse,
@@ -1037,3 +1040,51 @@ class APIClient:
             return response.json()
         else:
             self.handle_api_error(response)
+
+    def _handle_share_error(
+        self, response: requests.Response, extraction_id: str
+    ) -> NoReturn:
+        """Map share-endpoint errors to friendly messages.
+
+        400/404 get tailored text per the share-link spec; everything else
+        falls through to the generic handle_api_error path. 401s never
+        normally reach here: callers run load_session_auth first, which
+        sets _current_session_email, so _make_request's refresh path
+        raises SessionExpiredError (with a login hint) on 401. Under
+        no_login that field stays unset and a 401 does land in the
+        generic branch.
+        """
+        if response.status_code == 404:
+            raise Exception(f"Extraction not found (or not yours): {extraction_id}")
+        elif response.status_code == 400:
+            raise Exception(f"Malformed extraction id: {extraction_id}")
+        else:
+            self.handle_api_error(response)
+
+    def create_share(self, email: str, extraction_id: str) -> ShareResponse:
+        """Mint (or return the existing) share link for an extraction."""
+        if not self.load_session_auth(email):
+            raise Exception(f"No valid session found for {email}. Please login first.")
+
+        endpoint = f"{self.base_url}/api/extractions/{extraction_id}/share"
+        response = self._make_request("POST", endpoint)
+
+        # The server returns 201 for both a newly minted and a pre-existing
+        # live link (idempotent POST); there is no 200 case.
+        if response.status_code == 201:
+            return response.json()
+        else:
+            self._handle_share_error(response, extraction_id)
+
+    def revoke_share(self, email: str, extraction_id: str) -> RevokeShareResponse:
+        """Revoke an extraction's share link."""
+        if not self.load_session_auth(email):
+            raise Exception(f"No valid session found for {email}. Please login first.")
+
+        endpoint = f"{self.base_url}/api/extractions/{extraction_id}/share"
+        response = self._make_request("DELETE", endpoint)
+
+        if response.status_code == 204:
+            return {"extraction_id": extraction_id, "revoked": True}
+        else:
+            self._handle_share_error(response, extraction_id)

@@ -21,7 +21,7 @@ from herds_cli.calendar_status_display import ReconnectProviderResolver
 from herds_cli.core.base import APIResponseHandler, CommandBase, EventCommandBase
 from herds_cli.core.exceptions import HerdsError
 from herds_cli.output import OutputFormatter, console
-from herds_cli.types import EventV2, ExtractionResponse
+from herds_cli.types import EventV2, ExtractionResponse, ShareCommandOutput
 
 POLL_INTERVAL_SECS = 2.0
 POLL_TIMEOUT_SECS = 180.0
@@ -416,4 +416,92 @@ def ack_cmd(ctx, extraction_ids, email, before, ack_all):
 
     count = result.get("acknowledged_count", 0)
     OutputFormatter.print_success(f"Acknowledged {count} extraction(s)")
+    APIResponseHandler.format_and_output(result, cmd.output_format)
+
+
+@extractions.command("share")
+@click.argument("extraction_id")
+@click.option("--email", help="Email address (autodetect if only one session)")
+@click.option(
+    "--web-url",
+    help=(
+        "Also report the share URL rebuilt on this base "
+        "(e.g. http://localhost:5173) for testing a local web app"
+    ),
+)
+@click.pass_context
+def share_cmd(ctx, extraction_id, email, web_url):
+    """Mint (or return the existing) share link for an extraction.
+
+    The share URL (and nothing else) is printed on stdout - a deliberate
+    exception, scoped to this command, to the usual empty-stdout text
+    convention - so `herds extractions share <id> | pbcopy` works
+    directly. To keep that pipe working, a default `auto` format resolves
+    to text here even when piped (every other command resolves a piped
+    `auto` to json). Status messages stay on stderr. With --web-url, the
+    stdout line is the rebuilt local URL instead.
+
+    Scripts that want the token or the server URL explicitly can use:
+    `herds extractions share <id> --format json | jq -r .share_url`
+    """
+    cmd = CommandBase(ctx)
+    email = cmd.setup_session(email, show_client_type=True)
+    cmd.validate_session(email)
+    cmd.load_session_auth(email)
+
+    # An "auto" (default or explicit) resolved to json in cli() only because
+    # stdout is piped; honoring that here would put a JSON dump in the pipe
+    # the docstring promises a bare URL to. A chosen json/text still wins.
+    output_format = cmd.output_format
+    if ctx.obj.get("_raw_format") == "auto":
+        output_format = "text"
+
+    try:
+        result = cmd.api_client.create_share(email, extraction_id)
+    except Exception as exc:
+        OutputFormatter.print_error(str(exc))
+        raise HerdsError(f"failed to share extraction {extraction_id}") from exc
+
+    share_url = result["share_url"]
+    local_share_url: Optional[str] = None
+    if web_url:
+        # The web app serves public share pages at /s/<token>; this mirrors
+        # the path the server bakes into share_url, rebuilt on a local base.
+        local_share_url = f"{web_url.rstrip('/')}/s/{result['share_token']}"
+
+    payload = cast(ShareCommandOutput, result)
+    if local_share_url is not None:
+        payload["local_share_url"] = local_share_url
+    APIResponseHandler.format_and_output(payload, output_format)
+
+    OutputFormatter.print_success(f"Share link: {share_url}")
+    if local_share_url is not None:
+        OutputFormatter.print_info(f"Local share link: {local_share_url}")
+    if output_format != "json":
+        click.echo(local_share_url if local_share_url is not None else share_url)
+
+
+@extractions.command("unshare")
+@click.argument("extraction_id")
+@click.option("--email", help="Email address (autodetect if only one session)")
+@click.pass_context
+def unshare_cmd(ctx, extraction_id, email):
+    """Revoke an extraction's share link.
+
+    After revocation the public share page renders its
+    "link no longer active" state. Re-running `share` afterwards mints
+    a fresh token.
+    """
+    cmd = CommandBase(ctx)
+    email = cmd.setup_session(email, show_client_type=True)
+    cmd.validate_session(email)
+    cmd.load_session_auth(email)
+
+    try:
+        result = cmd.api_client.revoke_share(email, extraction_id)
+    except Exception as exc:
+        OutputFormatter.print_error(str(exc))
+        raise HerdsError(f"failed to unshare extraction {extraction_id}") from exc
+
+    OutputFormatter.print_success("Share link revoked.")
     APIResponseHandler.format_and_output(result, cmd.output_format)
