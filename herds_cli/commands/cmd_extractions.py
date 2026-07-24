@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, cast
+from typing import List, Optional, cast
 from zoneinfo import ZoneInfo
 
 import click
@@ -21,7 +21,7 @@ from herds_cli.calendar_status_display import ReconnectProviderResolver
 from herds_cli.core.base import APIResponseHandler, CommandBase, EventCommandBase
 from herds_cli.core.exceptions import HerdsError
 from herds_cli.output import OutputFormatter, console
-from herds_cli.types import EventV2, ExtractionResponse
+from herds_cli.types import EventV2, ExtractionResponse, ShareCommandOutput
 
 POLL_INTERVAL_SECS = 2.0
 POLL_TIMEOUT_SECS = 180.0
@@ -456,9 +456,12 @@ def share_cmd(ctx, extraction_id, email, web_url):
     share_url = result.get("share_url", "")
     local_share_url: Optional[str] = None
     if web_url:
+        # The web app serves public share pages at /s/<token>; this mirrors
+        # the path the server bakes into share_url, rebuilt on a local base.
         local_share_url = f"{web_url.rstrip('/')}/s/{result.get('share_token', '')}"
 
-    payload: Dict[str, Any] = dict(result)
+    # dict(result) keeps the server response verbatim (unknown keys included).
+    payload = cast(ShareCommandOutput, dict(result))
     if local_share_url is not None:
         payload["local_share_url"] = local_share_url
     APIResponseHandler.format_and_output(payload, cmd.output_format)
@@ -467,6 +470,8 @@ def share_cmd(ctx, extraction_id, email, web_url):
         OutputFormatter.print_success(f"Share link: {share_url}")
         if local_share_url is not None:
             OutputFormatter.print_info(f"Local share link: {local_share_url}")
+        # format_and_output wrote nothing in text mode; this echo is the
+        # command's single stdout write (the pipeable URL).
         click.echo(local_share_url if local_share_url is not None else share_url)
 
 
