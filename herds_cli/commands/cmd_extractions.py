@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from typing import List, Optional, cast
+from typing import Any, Dict, List, Optional, cast
 from zoneinfo import ZoneInfo
 
 import click
@@ -417,3 +417,56 @@ def ack_cmd(ctx, extraction_ids, email, before, ack_all):
     count = result.get("acknowledged_count", 0)
     OutputFormatter.print_success(f"Acknowledged {count} extraction(s)")
     APIResponseHandler.format_and_output(result, cmd.output_format)
+
+
+@extractions.command("share")
+@click.argument("extraction_id")
+@click.option("--email", help="Email address (autodetect if only one session)")
+@click.option(
+    "--web-url",
+    help=(
+        "Also report the share URL rebuilt on this base "
+        "(e.g. http://localhost:5173) for testing a local web app"
+    ),
+)
+@click.pass_context
+def share_cmd(ctx, extraction_id, email, web_url):
+    """Mint (or return the existing) share link for an extraction.
+
+    Unlike other text-mode commands, this one also prints the share URL
+    (and nothing else) on stdout, so `herds extractions share <id> | pbcopy`
+    works directly; status messages stay on stderr. When --web-url is
+    passed, the stdout line is the rebuilt local URL instead. This is a
+    deliberate, scoped deviation from the stdout-empty text convention.
+
+    Scripts that want the token or the server URL explicitly should use:
+    `herds extractions share <id> --format json | jq -r .share_url`
+    """
+    cmd = CommandBase(ctx)
+    email = cmd.setup_session(email, show_client_type=True)
+    cmd.validate_session(email)
+    cmd.load_session_auth(email)
+
+    try:
+        result = cmd.api_client.create_share(email, extraction_id)
+    except Exception as exc:
+        OutputFormatter.print_error(str(exc))
+        raise HerdsError(f"failed to share extraction {extraction_id}") from exc
+
+    share_url = result.get("share_url", "")
+    local_share_url: Optional[str] = None
+    if web_url:
+        local_share_url = f"{web_url.rstrip('/')}/s/{result.get('share_token', '')}"
+
+    if cmd.output_format == "json":
+        payload: Dict[str, Any] = dict(result)
+        if local_share_url is not None:
+            payload["local_share_url"] = local_share_url
+        APIResponseHandler.format_and_output(payload, "json")
+        return
+
+    OutputFormatter.print_success(f"Share link: {share_url}")
+    if local_share_url is not None:
+        OutputFormatter.print_info(f"Local share link: {local_share_url}")
+    # Pipeable data channel: the one URL the caller came for (see docstring).
+    click.echo(local_share_url if local_share_url is not None else share_url)
