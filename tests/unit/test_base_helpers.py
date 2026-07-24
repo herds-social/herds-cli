@@ -456,18 +456,14 @@ class TestDisplayEventDetails:
         assert "Extraction ID: ext-42" in out
         assert out.index("Event ID: evt-1") < out.index("Extraction ID: ext-42")
 
-    def test_extraction_id_line_omitted_when_absent(self, capsys):
-        """Older servers do not send the field; no placeholder line appears.
-        (The lowercase raw key in the full dump is a different string, so
-        asserting on the curated 'Extraction ID' label is unambiguous.)"""
-        self._make_cmd().display_event_details(self.BASE_EVENT)
-        out = capsys.readouterr().err
-        assert "Extraction ID" not in out
-
-    def test_null_extraction_id_omitted(self, capsys):
-        """A legacy event with neither event_source_id nor image_id arrives
-        with extraction_id: null; render nothing rather than 'None'."""
-        event = {**self.BASE_EVENT, "extraction_id": None}
+    @pytest.mark.parametrize("overrides", [{}, {"extraction_id": None}])
+    def test_extraction_id_line_omitted_without_value(self, capsys, overrides):
+        """Older servers omit the key and current servers send an explicit
+        null for events with no extraction; either way no curated line
+        appears, and never a literal 'None'. (The lowercase raw key in the
+        full dump is a different string, so asserting on the curated
+        'Extraction ID' label is unambiguous.)"""
+        event = {**self.BASE_EVENT, **overrides}
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
         assert "Extraction ID" not in out
