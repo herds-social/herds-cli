@@ -499,3 +499,21 @@ class AcknowledgeResponse(TypedDict):
     """Response from POST /api/extractions/acknowledge."""
 
     acknowledged_count: int
+
+
+class ShareResponse(TypedDict):
+    """Response from POST /api/extractions/{extraction_id}/share."""
+
+    share_token: str
+    share_url: str
+
+
+class RevokeShareResponse(TypedDict):
+    """CLI-synthesized result for DELETE /api/extractions/{extraction_id}/share.
+
+    The server returns 204 with no body; the CLI synthesizes this shape for
+    json output, mirroring DeleteEventResponse.
+    """
+
+    extraction_id: str
+    revoked: bool
