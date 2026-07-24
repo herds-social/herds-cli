@@ -33,7 +33,9 @@ from .types import (
     ExtractionListResponse,
     ExtractionResponse,
     LoginResponse,
+    RevokeShareResponse,
     SessionData,
+    ShareResponse,
     UpdatePasswordResponse,
     UrlSubmissionResponse,
     UsageResponse,
@@ -1037,3 +1039,33 @@ class APIClient:
             return response.json()
         else:
             self.handle_api_error(response)
+
+    def _handle_share_error(
+        self, response: requests.Response, extraction_id: str
+    ) -> NoReturn:
+        """Map share-endpoint errors to friendly messages.
+
+        400/404/401 get tailored text per the share-link spec; anything
+        else falls through to the generic handle_api_error path.
+        """
+        if response.status_code == 404:
+            raise Exception(f"Extraction not found (or not yours): {extraction_id}")
+        elif response.status_code == 400:
+            raise Exception(f"Malformed extraction id: {extraction_id}")
+        elif response.status_code == 401:
+            raise Exception("Authentication failed. Run: herds user login")
+        else:
+            self.handle_api_error(response)
+
+    def create_share(self, email: str, extraction_id: str) -> ShareResponse:
+        """Mint (or return the existing) share link for an extraction."""
+        if not self.load_session_auth(email):
+            raise Exception(f"No valid session found for {email}. Please login first.")
+
+        endpoint = f"{self.base_url}/api/extractions/{extraction_id}/share"
+        response = self._make_request("POST", endpoint)
+
+        if response.status_code == 201:
+            return response.json()
+        else:
+            self._handle_share_error(response, extraction_id)
