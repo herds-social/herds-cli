@@ -233,3 +233,35 @@ class TestCreateShare:
     def test_no_session_raises(self, mock_api_client):
         with pytest.raises(Exception, match="No valid session"):
             mock_api_client.create_share("nobody@example.com", "ext-1")
+
+
+class TestRevokeShare:
+    def test_deletes_and_returns_synthesized_body(
+        self, mock_api_client, mock_session_manager
+    ):
+        _save_session(mock_session_manager)
+        mock_api_client.session.request.return_value = MagicMock(status_code=204)
+
+        result = mock_api_client.revoke_share("test@example.com", "ext-1")
+
+        assert result == {"extraction_id": "ext-1", "revoked": True}
+        call = mock_api_client.session.request.call_args
+        assert call.args == (
+            "DELETE",
+            "http://localhost:8000/api/extractions/ext-1/share",
+        )
+
+    def test_404_raises_friendly_message(self, mock_api_client, mock_session_manager):
+        _save_session(mock_session_manager)
+        resp = MagicMock(status_code=404)
+        resp.json.return_value = {"detail": "Extraction not found"}
+        mock_api_client.session.request.return_value = resp
+
+        with pytest.raises(
+            Exception, match=r"Extraction not found \(or not yours\): ext-1"
+        ):
+            mock_api_client.revoke_share("test@example.com", "ext-1")
+
+    def test_no_session_raises(self, mock_api_client):
+        with pytest.raises(Exception, match="No valid session"):
+            mock_api_client.revoke_share("nobody@example.com", "ext-1")
