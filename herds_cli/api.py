@@ -1069,3 +1069,16 @@ class APIClient:
             return response.json()
         else:
             self._handle_share_error(response, extraction_id)
+
+    def revoke_share(self, email: str, extraction_id: str) -> RevokeShareResponse:
+        """Revoke an extraction's share link."""
+        if not self.load_session_auth(email):
+            raise Exception(f"No valid session found for {email}. Please login first.")
+
+        endpoint = f"{self.base_url}/api/extractions/{extraction_id}/share"
+        response = self._make_request("DELETE", endpoint)
+
+        if response.status_code == 204:
+            return {"extraction_id": extraction_id, "revoked": True}
+        else:
+            self._handle_share_error(response, extraction_id)
