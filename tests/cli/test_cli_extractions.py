@@ -390,6 +390,21 @@ class TestExtractionsShare:
 
         assert result.exit_code == 0
         assert json.loads(result.stdout) == SHARE_RESPONSE
+        assert "Share link:" in strip_ansi(result.stderr)
+
+    def test_piped_default_auto_resolves_to_text(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        # A piped default "auto" resolves to json in cli(); share overrides
+        # that (via _raw_format) so `share <id> | pbcopy` gets the bare URL.
+        cli_obj["_raw_format"] = "auto"
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            201, SHARE_RESPONSE
+        )
+
+        result = cli_runner.invoke(cli, ["extractions", "share", "ext-1"], obj=cli_obj)
+
+        assert result.exit_code == 0
+        assert strip_ansi(result.stdout) == "https://app.herds.events/s/3fk9tok\n"
 
     def test_web_url_rebuilds_local_url_in_text_mode(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])

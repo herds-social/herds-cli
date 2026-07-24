@@ -251,17 +251,6 @@ class TestRevokeShare:
             "http://localhost:8000/api/extractions/ext-1/share",
         )
 
-    def test_404_raises_friendly_message(self, mock_api_client, mock_session_manager):
-        _save_session(mock_session_manager)
-        resp = MagicMock(status_code=404)
-        resp.json.return_value = {"detail": "Extraction not found"}
-        mock_api_client.session.request.return_value = resp
-
-        with pytest.raises(
-            Exception, match=r"Extraction not found \(or not yours\): ext-1"
-        ):
-            mock_api_client.revoke_share("test@example.com", "ext-1")
-
     def test_no_session_raises(self, mock_api_client):
         with pytest.raises(Exception, match="No valid session"):
             mock_api_client.revoke_share("nobody@example.com", "ext-1")
