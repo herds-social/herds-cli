@@ -449,9 +449,9 @@ def share_cmd(ctx, extraction_id, email, web_url):
     cmd.validate_session(email)
     cmd.load_session_auth(email)
 
-    # An unforced "auto" resolved to json in cli() only because stdout is
-    # piped; honoring that here would put a JSON dump in the pipe the
-    # docstring promises a bare URL to. Explicit/configured json still wins.
+    # An "auto" (default or explicit) resolved to json in cli() only because
+    # stdout is piped; honoring that here would put a JSON dump in the pipe
+    # the docstring promises a bare URL to. A chosen json/text still wins.
     output_format = cmd.output_format
     if ctx.obj.get("_raw_format") == "auto":
         output_format = "text"
