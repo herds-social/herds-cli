@@ -433,10 +433,12 @@ def ack_cmd(ctx, extraction_ids, email, before, ack_all):
 def share_cmd(ctx, extraction_id, email, web_url):
     """Mint (or return the existing) share link for an extraction.
 
-    In text mode the share URL (and nothing else) is also printed on
-    stdout - a deliberate exception, scoped to this command, to the usual
-    empty-stdout convention - so `herds extractions share <id> | pbcopy`
-    works directly; status messages stay on stderr. With --web-url, the
+    The share URL (and nothing else) is printed on stdout - a deliberate
+    exception, scoped to this command, to the usual empty-stdout text
+    convention - so `herds extractions share <id> | pbcopy` works
+    directly. To keep that pipe working, a default `auto` format resolves
+    to text here even when piped (every other command resolves a piped
+    `auto` to json). Status messages stay on stderr. With --web-url, the
     stdout line is the rebuilt local URL instead.
 
     Scripts that want the token or the server URL explicitly can use:
@@ -447,31 +449,35 @@ def share_cmd(ctx, extraction_id, email, web_url):
     cmd.validate_session(email)
     cmd.load_session_auth(email)
 
+    # An unforced "auto" resolved to json in cli() only because stdout is
+    # piped; honoring that here would put a JSON dump in the pipe the
+    # docstring promises a bare URL to. Explicit/configured json still wins.
+    output_format = cmd.output_format
+    if ctx.obj.get("_raw_format") == "auto":
+        output_format = "text"
+
     try:
         result = cmd.api_client.create_share(email, extraction_id)
     except Exception as exc:
         OutputFormatter.print_error(str(exc))
         raise HerdsError(f"failed to share extraction {extraction_id}") from exc
 
-    share_url = result.get("share_url", "")
+    share_url = result["share_url"]
     local_share_url: Optional[str] = None
     if web_url:
         # The web app serves public share pages at /s/<token>; this mirrors
         # the path the server bakes into share_url, rebuilt on a local base.
-        local_share_url = f"{web_url.rstrip('/')}/s/{result.get('share_token', '')}"
+        local_share_url = f"{web_url.rstrip('/')}/s/{result['share_token']}"
 
-    # dict(result) keeps the server response verbatim (unknown keys included).
-    payload = cast(ShareCommandOutput, dict(result))
+    payload = cast(ShareCommandOutput, result)
     if local_share_url is not None:
         payload["local_share_url"] = local_share_url
-    APIResponseHandler.format_and_output(payload, cmd.output_format)
+    APIResponseHandler.format_and_output(payload, output_format)
 
-    if cmd.output_format != "json":
-        OutputFormatter.print_success(f"Share link: {share_url}")
-        if local_share_url is not None:
-            OutputFormatter.print_info(f"Local share link: {local_share_url}")
-        # format_and_output wrote nothing in text mode; this echo is the
-        # command's single stdout write (the pipeable URL).
+    OutputFormatter.print_success(f"Share link: {share_url}")
+    if local_share_url is not None:
+        OutputFormatter.print_info(f"Local share link: {local_share_url}")
+    if output_format != "json":
         click.echo(local_share_url if local_share_url is not None else share_url)
 
 
