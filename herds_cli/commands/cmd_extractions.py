@@ -433,13 +433,13 @@ def ack_cmd(ctx, extraction_ids, email, before, ack_all):
 def share_cmd(ctx, extraction_id, email, web_url):
     """Mint (or return the existing) share link for an extraction.
 
-    Unlike other text-mode commands, this one also prints the share URL
-    (and nothing else) on stdout, so `herds extractions share <id> | pbcopy`
-    works directly; status messages stay on stderr. When --web-url is
-    passed, the stdout line is the rebuilt local URL instead. This is a
-    deliberate, scoped deviation from the stdout-empty text convention.
+    In text mode the share URL (and nothing else) is also printed on
+    stdout - a deliberate exception, scoped to this command, to the usual
+    empty-stdout convention - so `herds extractions share <id> | pbcopy`
+    works directly; status messages stay on stderr. With --web-url, the
+    stdout line is the rebuilt local URL instead.
 
-    Scripts that want the token or the server URL explicitly should use:
+    Scripts that want the token or the server URL explicitly can use:
     `herds extractions share <id> --format json | jq -r .share_url`
     """
     cmd = CommandBase(ctx)
@@ -458,18 +458,16 @@ def share_cmd(ctx, extraction_id, email, web_url):
     if web_url:
         local_share_url = f"{web_url.rstrip('/')}/s/{result.get('share_token', '')}"
 
-    if cmd.output_format == "json":
-        payload: Dict[str, Any] = dict(result)
-        if local_share_url is not None:
-            payload["local_share_url"] = local_share_url
-        APIResponseHandler.format_and_output(payload, "json")
-        return
-
-    OutputFormatter.print_success(f"Share link: {share_url}")
+    payload: Dict[str, Any] = dict(result)
     if local_share_url is not None:
-        OutputFormatter.print_info(f"Local share link: {local_share_url}")
-    # Pipeable data channel: the one URL the caller came for (see docstring).
-    click.echo(local_share_url if local_share_url is not None else share_url)
+        payload["local_share_url"] = local_share_url
+    APIResponseHandler.format_and_output(payload, cmd.output_format)
+
+    if cmd.output_format != "json":
+        OutputFormatter.print_success(f"Share link: {share_url}")
+        if local_share_url is not None:
+            OutputFormatter.print_info(f"Local share link: {local_share_url}")
+        click.echo(local_share_url if local_share_url is not None else share_url)
 
 
 @extractions.command("unshare")
