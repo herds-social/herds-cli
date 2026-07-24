@@ -273,9 +273,13 @@ class EventCommandBase(CommandBase):
 
         display_info = f"{display_date}{location_display}{organizer_display}"
 
+        # Server strings are arbitrary text and print_info parses Rich
+        # markup: escape every server-derived value so bracketed content
+        # renders literally instead of styling the line (or crashing on
+        # malformed tags), matching display_events_summary.
         if parent_title:
-            OutputFormatter.print_info(f"Parent: {parent_title}")
-        OutputFormatter.print_info(f"Title: {title}")
+            OutputFormatter.print_info(f"Parent: {escape(str(parent_title))}")
+        OutputFormatter.print_info(f"Title: {escape(str(title))}")
         event_id = event_data.get("id")
         if event_id:
             OutputFormatter.print_info(f"Event ID: {escape(str(event_id))}")
@@ -286,12 +290,14 @@ class EventCommandBase(CommandBase):
             OutputFormatter.print_info(
                 f"Extraction ID: {escape(str(extraction_id))}"
             )
-        OutputFormatter.print_info(f"Date: {display_info}")
-        OutputFormatter.print_info(f"Category: {category}")
+        OutputFormatter.print_info(f"Date: {escape(display_info)}")
+        OutputFormatter.print_info(f"Category: {escape(str(category))}")
 
         description = event_data.get("event_description")
         if description:
-            OutputFormatter.print_info(f"Description: {description}")
+            OutputFormatter.print_info(
+                f"Description: {escape(str(description))}"
+            )
 
         # Display calendar add status. Success branch stays inline; the
         # no-add branches are owned by calendar_status_display so the

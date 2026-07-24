@@ -476,6 +476,16 @@ class TestDisplayEventDetails:
         out = capsys.readouterr().err
         assert "[bold]x[/bold]" in out
 
+    def test_markup_like_title_renders_literally(self, capsys):
+        """Every curated header line escapes server text: a malformed
+        closing tag in a title must render literally rather than crash
+        Rich's markup parser (MarkupError is not a HerdsError, so it
+        would surface as a raw traceback)."""
+        event = {**self.BASE_EVENT, "title": "DJ Night [/closing] set"}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "DJ Night [/closing] set" in out
+
     def test_images_block_renders_between_calendar_and_dump(self, capsys):
         """images_v3 gets a curated block: one numbered line per image,
         placed after the calendar status and before the full dump."""

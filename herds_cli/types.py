@@ -193,11 +193,20 @@ class ImageAssetsV3(TypedDict, total=False):
 
 
 class EventV2(TypedDict, total=False):
-    """Event object from the v2 API (/api/events/v2).
+    """Event object from the v2 API.
 
-    This captures the fields accessed by display_event_details() and
-    display_events_summary(). The actual server response may contain
-    additional fields not listed here.
+    The shared v2 event payload shape: returned by /api/events/v2 (lists),
+    GET/PUT /api/events/{id}, /api/extractions/{id}/events, and the
+    image-upload extraction result. This captures the fields accessed by
+    display_event_details() and display_events_summary(). The actual server
+    response may contain additional fields not listed here; instances are
+    unvalidated casts of raw JSON, so read fields with .get().
+
+    extraction_id (server PR herds-social/herds#293) is the join key to the
+    extractions API: the same id as ExtractionResponse.extraction_id and the
+    argument accepted by `herds extractions get|events`. Optional because
+    pre-#293 servers omit the key and current servers send an explicit null
+    for events with no owning extraction; treat missing and None identically.
     """
 
     id: str
