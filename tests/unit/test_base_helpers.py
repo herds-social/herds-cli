@@ -486,6 +486,22 @@ class TestDisplayEventDetails:
         out = capsys.readouterr().err
         assert "DJ Night [/closing] set" in out
 
+    def test_markup_like_calendar_values_render_literally(self, capsys):
+        """The calendar-status lines carry server values too (calendar id,
+        provider event id); bracketed values must render literally instead
+        of being read as Rich markup."""
+        event = {
+            **self.BASE_EVENT,
+            "user_data": {
+                "google_calendar_event_id": "evt[123]",
+                "calendar_id": "[work] calendar",
+            },
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "evt[123]" in out
+        assert "[work] calendar" in out
+
     def test_images_block_renders_between_calendar_and_dump(self, capsys):
         """images_v3 gets a curated block: one numbered line per image,
         placed after the calendar status and before the full dump."""

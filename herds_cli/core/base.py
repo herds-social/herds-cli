@@ -273,18 +273,17 @@ class EventCommandBase(CommandBase):
 
         display_info = f"{display_date}{location_display}{organizer_display}"
 
-        # Server strings are arbitrary text and print_info parses Rich
-        # markup: escape every server-derived value so bracketed content
-        # renders literally instead of styling the line (or crashing on
-        # malformed tags), matching display_events_summary.
+        # Server strings are arbitrary text; escape every server-derived
+        # value so bracketed content renders literally (same policy as
+        # display_events_summary).
         if parent_title:
             OutputFormatter.print_info(f"Parent: {escape(str(parent_title))}")
         OutputFormatter.print_info(f"Title: {escape(str(title))}")
         event_id = event_data.get("id")
         if event_id:
             OutputFormatter.print_info(f"Event ID: {escape(str(event_id))}")
-        # Share/join handle from server PR herds-social/herds#293: the id
-        # accepted by `herds extractions get/events`.
+        # Join key to `herds extractions get/events`; see
+        # EventV2.extraction_id.
         extraction_id = event_data.get("extraction_id")
         if extraction_id:
             OutputFormatter.print_info(
@@ -320,20 +319,24 @@ class EventCommandBase(CommandBase):
 
         if added_provider:
             target_suffix = (
-                f" (calendar: {target_calendar})" if target_calendar else ""
+                f" (calendar: {escape(str(target_calendar))})"
+                if target_calendar
+                else ""
             )
             OutputFormatter.print_info(
                 f"In {added_provider} calendar{target_suffix} "
-                f"— event id: {added_event_id}"
+                f"— event id: {escape(str(added_event_id))}"
             )
         else:
+            # Messages may embed raw server strings (e.g. an unrecognized
+            # calendar_add_error code); escape like the header lines above.
             for severity, message in render_calendar_status(
                 user_data, resolver=resolver
             ):
                 if severity == "warning":
-                    OutputFormatter.print_warning(message)
+                    OutputFormatter.print_warning(escape(message))
                 else:
-                    OutputFormatter.print_info(message)
+                    OutputFormatter.print_info(escape(message))
 
         # Curated images summary from images_v3 (server PR
         # herds-social/herds#285). The full dump below also prints the raw
