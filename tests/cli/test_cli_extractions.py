@@ -62,6 +62,11 @@ SAMPLE_EVENT = {
     "contact": {"organizer": "Neighborhood Org"},
 }
 
+SHARE_RESPONSE = {
+    "share_token": "3fk9tok",
+    "share_url": "https://app.herds.events/s/3fk9tok",
+}
+
 
 class TestExtractionsList:
     def test_renders_url_and_image_rows(self, cli_runner, cli_obj):
@@ -351,3 +356,99 @@ class TestParseBeforeTimestamp:
     def test_invalid_raises_usage_error(self):
         with pytest.raises(Exception, match="Invalid --before"):
             parse_before_timestamp("not-a-date", "UTC")
+
+
+class TestExtractionsShare:
+    def test_text_mode_prints_bare_url_on_stdout(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            201, SHARE_RESPONSE
+        )
+
+        result = cli_runner.invoke(cli, ["extractions", "share", "ext-1"], obj=cli_obj)
+
+        assert result.exit_code == 0
+        assert strip_ansi(result.stdout) == "https://app.herds.events/s/3fk9tok\n"
+        assert "Share link: https://app.herds.events/s/3fk9tok" in strip_ansi(
+            result.stderr
+        )
+        call = cli_obj["api_client"].session.request.call_args
+        assert call.args == (
+            "POST",
+            "http://localhost:8000/api/extractions/ext-1/share",
+        )
+
+    def test_json_mode_emits_server_response_verbatim(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            201, SHARE_RESPONSE
+        )
+
+        result = cli_runner.invoke(cli, ["extractions", "share", "ext-1"], obj=cli_obj)
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == SHARE_RESPONSE
+
+    def test_web_url_rebuilds_local_url_in_text_mode(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            201, SHARE_RESPONSE
+        )
+
+        result = cli_runner.invoke(
+            cli,
+            [
+                "extractions",
+                "share",
+                "ext-1",
+                "--web-url",
+                "http://localhost:5173/",
+            ],
+            obj=cli_obj,
+        )
+
+        assert result.exit_code == 0
+        assert strip_ansi(result.stdout) == "http://localhost:5173/s/3fk9tok\n"
+        err = strip_ansi(result.stderr)
+        assert "Share link: https://app.herds.events/s/3fk9tok" in err
+        assert "Local share link: http://localhost:5173/s/3fk9tok" in err
+
+    def test_web_url_adds_local_share_url_in_json_mode(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            201, SHARE_RESPONSE
+        )
+
+        result = cli_runner.invoke(
+            cli,
+            [
+                "extractions",
+                "share",
+                "ext-1",
+                "--web-url",
+                "http://localhost:5173",
+            ],
+            obj=cli_obj,
+        )
+
+        assert json.loads(result.stdout) == {
+            **SHARE_RESPONSE,
+            "local_share_url": "http://localhost:5173/s/3fk9tok",
+        }
+
+    def test_404_exits_nonzero_with_friendly_message(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            404, {"detail": "Extraction not found"}
+        )
+
+        result = cli_runner.invoke(cli, ["extractions", "share", "ext-1"], obj=cli_obj)
+
+        assert result.exit_code != 0
+        assert "Extraction not found (or not yours): ext-1" in strip_ansi(
+            result.stderr
+        )
