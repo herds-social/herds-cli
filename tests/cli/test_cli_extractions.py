@@ -452,3 +452,53 @@ class TestExtractionsShare:
         assert "Extraction not found (or not yours): ext-1" in strip_ansi(
             result.stderr
         )
+
+
+class TestExtractionsUnshare:
+    def test_text_mode_confirms_and_keeps_stdout_empty(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["config"].output_format = "text"
+        cli_obj["format"] = "text"
+        cli_obj["api_client"].session.request.return_value = _make_response(204)
+
+        result = cli_runner.invoke(
+            cli, ["extractions", "unshare", "ext-1"], obj=cli_obj
+        )
+
+        assert result.exit_code == 0
+        assert strip_ansi(result.stdout) == ""
+        assert "Share link revoked." in strip_ansi(result.stderr)
+        call = cli_obj["api_client"].session.request.call_args
+        assert call.args == (
+            "DELETE",
+            "http://localhost:8000/api/extractions/ext-1/share",
+        )
+
+    def test_json_mode_emits_revoked_payload(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["api_client"].session.request.return_value = _make_response(204)
+
+        result = cli_runner.invoke(
+            cli, ["extractions", "unshare", "ext-1"], obj=cli_obj
+        )
+
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {
+            "extraction_id": "ext-1",
+            "revoked": True,
+        }
+
+    def test_404_exits_nonzero_with_friendly_message(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            404, {"detail": "Extraction not found"}
+        )
+
+        result = cli_runner.invoke(
+            cli, ["extractions", "unshare", "ext-1"], obj=cli_obj
+        )
+
+        assert result.exit_code != 0
+        assert "Extraction not found (or not yours): ext-1" in strip_ansi(
+            result.stderr
+        )
