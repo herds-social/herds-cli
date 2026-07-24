@@ -470,3 +470,29 @@ def share_cmd(ctx, extraction_id, email, web_url):
         OutputFormatter.print_info(f"Local share link: {local_share_url}")
     # Pipeable data channel: the one URL the caller came for (see docstring).
     click.echo(local_share_url if local_share_url is not None else share_url)
+
+
+@extractions.command("unshare")
+@click.argument("extraction_id")
+@click.option("--email", help="Email address (autodetect if only one session)")
+@click.pass_context
+def unshare_cmd(ctx, extraction_id, email):
+    """Revoke an extraction's share link.
+
+    After revocation the public share page renders its
+    "link no longer active" state. Re-running `share` afterwards mints
+    a fresh token.
+    """
+    cmd = CommandBase(ctx)
+    email = cmd.setup_session(email, show_client_type=True)
+    cmd.validate_session(email)
+    cmd.load_session_auth(email)
+
+    try:
+        result = cmd.api_client.revoke_share(email, extraction_id)
+    except Exception as exc:
+        OutputFormatter.print_error(str(exc))
+        raise HerdsError(f"failed to unshare extraction {extraction_id}") from exc
+
+    OutputFormatter.print_success("Share link revoked.")
+    APIResponseHandler.format_and_output(result, cmd.output_format)
