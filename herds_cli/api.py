@@ -1045,15 +1045,15 @@ class APIClient:
     ) -> NoReturn:
         """Map share-endpoint errors to friendly messages.
 
-        400/404/401 get tailored text per the share-link spec; anything
-        else falls through to the generic handle_api_error path.
+        400/404 get tailored text per the share-link spec. 401s never
+        normally reach here (_make_request's refresh path raises
+        SessionExpiredError with a login hint first); they and everything
+        else fall through to the generic handle_api_error path.
         """
         if response.status_code == 404:
             raise Exception(f"Extraction not found (or not yours): {extraction_id}")
         elif response.status_code == 400:
             raise Exception(f"Malformed extraction id: {extraction_id}")
-        elif response.status_code == 401:
-            raise Exception("Authentication failed. Run: herds user login")
         else:
             self.handle_api_error(response)
 
