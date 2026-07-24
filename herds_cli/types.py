@@ -201,6 +201,7 @@ class EventV2(TypedDict, total=False):
     """
 
     id: str
+    extraction_id: Optional[str]
     parent_title: str
     title: str
     category_level_1: str

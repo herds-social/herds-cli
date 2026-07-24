@@ -279,6 +279,14 @@ class EventCommandBase(CommandBase):
         event_id = event_data.get("id")
         if event_id:
             OutputFormatter.print_info(f"Event ID: {event_id}")
+        # Share/join handle from server PR herds-social/herds#293: the id
+        # accepted by `herds extractions get/events`. Null or absent for
+        # events from servers predating the field; render nothing then.
+        extraction_id = event_data.get("extraction_id")
+        if extraction_id:
+            OutputFormatter.print_info(
+                f"Extraction ID: {escape(str(extraction_id))}"
+            )
         OutputFormatter.print_info(f"Date: {display_info}")
         OutputFormatter.print_info(f"Category: {category}")
 

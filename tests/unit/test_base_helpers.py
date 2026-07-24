@@ -446,6 +446,40 @@ class TestDisplayEventDetails:
         out = capsys.readouterr().err
         assert "2026-08-01 at 7:00 PM" in out
 
+    def test_extraction_id_rendered_after_event_id(self, capsys):
+        """extraction_id (server PR herds-social/herds#293) is the share/join
+        handle for the extractions commands; it gets a curated line right
+        after the Event ID line."""
+        event = {**self.BASE_EVENT, "id": "evt-1", "extraction_id": "ext-42"}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Extraction ID: ext-42" in out
+        assert out.index("Event ID: evt-1") < out.index("Extraction ID: ext-42")
+
+    def test_extraction_id_line_omitted_when_absent(self, capsys):
+        """Older servers do not send the field; no placeholder line appears.
+        (The lowercase raw key in the full dump is a different string, so
+        asserting on the curated 'Extraction ID' label is unambiguous.)"""
+        self._make_cmd().display_event_details(self.BASE_EVENT)
+        out = capsys.readouterr().err
+        assert "Extraction ID" not in out
+
+    def test_null_extraction_id_omitted(self, capsys):
+        """A legacy event with neither event_source_id nor image_id arrives
+        with extraction_id: null; render nothing rather than 'None'."""
+        event = {**self.BASE_EVENT, "extraction_id": None}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Extraction ID" not in out
+
+    def test_markup_like_extraction_id_renders_literally(self, capsys):
+        """Ids are escaped before printing, matching the images_v3 id
+        convention, so bracketed values do not vanish as Rich markup."""
+        event = {**self.BASE_EVENT, "extraction_id": "[bold]x[/bold]"}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "[bold]x[/bold]" in out
+
     def test_images_block_renders_between_calendar_and_dump(self, capsys):
         """images_v3 gets a curated block: one numbered line per image,
         placed after the calendar status and before the full dump."""
