@@ -21,11 +21,14 @@ herds_cli/
 └── commands/
     ├── cmd_user.py           login, logout, create-user, whoami, sessions, Google OAuth
     ├── cmd_image.py          upload, get, detections, in-progress, delete
+    ├── cmd_url.py            submit (URL event extraction, optional polling)
     ├── cmd_events.py         list (date filters/sorting), get, update, delete, by-image
+    ├── cmd_extractions.py    list, get, events, ack (extraction jobs; joined from events via EventV2.extraction_id)
     ├── cmd_event_user_data.py  get/update/delete calendar integration data per event
     ├── cmd_config.py         show, validate, set, save, reset
     ├── cmd_user_settings.py  get/update user preferences
-    └── cmd_calendar.py       connect (Google/Outlook OAuth), status, list calendars
+    ├── cmd_calendar.py       connect (Google/Outlook OAuth), status, list calendars
+    └── cmd_ping.py           API health check
 ```
 
 ## Dependency Flow

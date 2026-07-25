@@ -446,6 +446,62 @@ class TestDisplayEventDetails:
         out = capsys.readouterr().err
         assert "2026-08-01 at 7:00 PM" in out
 
+    def test_extraction_id_rendered_after_event_id(self, capsys):
+        """extraction_id (server PR herds-social/herds#293) is the share/join
+        handle for the extractions commands; it gets a curated line right
+        after the Event ID line."""
+        event = {**self.BASE_EVENT, "id": "evt-1", "extraction_id": "ext-42"}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Extraction ID: ext-42" in out
+        assert out.index("Event ID: evt-1") < out.index("Extraction ID: ext-42")
+
+    @pytest.mark.parametrize("overrides", [{}, {"extraction_id": None}])
+    def test_extraction_id_line_omitted_without_value(self, capsys, overrides):
+        """Older servers omit the key and current servers send an explicit
+        null for events with no extraction; either way no curated line
+        appears, and never a literal 'None'. (The lowercase raw key in the
+        full dump is a different string, so asserting on the curated
+        'Extraction ID' label is unambiguous.)"""
+        event = {**self.BASE_EVENT, **overrides}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Extraction ID" not in out
+
+    def test_markup_like_extraction_id_renders_literally(self, capsys):
+        """Ids are escaped before printing, matching the images_v3 id
+        convention, so bracketed values do not vanish as Rich markup."""
+        event = {**self.BASE_EVENT, "extraction_id": "[bold]x[/bold]"}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "[bold]x[/bold]" in out
+
+    def test_markup_like_title_renders_literally(self, capsys):
+        """Every curated header line escapes server text: a malformed
+        closing tag in a title must render literally rather than crash
+        Rich's markup parser (MarkupError is not a HerdsError, so it
+        would surface as a raw traceback)."""
+        event = {**self.BASE_EVENT, "title": "DJ Night [/closing] set"}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "DJ Night [/closing] set" in out
+
+    def test_markup_like_calendar_values_render_literally(self, capsys):
+        """The calendar-status lines carry server values too (calendar id,
+        provider event id); bracketed values must render literally instead
+        of being read as Rich markup."""
+        event = {
+            **self.BASE_EVENT,
+            "user_data": {
+                "google_calendar_event_id": "evt[123]",
+                "calendar_id": "[work] calendar",
+            },
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "evt[123]" in out
+        assert "[work] calendar" in out
+
     def test_images_block_renders_between_calendar_and_dump(self, capsys):
         """images_v3 gets a curated block: one numbered line per image,
         placed after the calendar status and before the full dump."""
