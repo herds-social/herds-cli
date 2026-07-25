@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from herds_cli.api import APIClient
+from herds_cli.core.exceptions import SessionExpiredError
 
 
 def _save_session(session_manager, email="test@example.com"):
@@ -233,6 +234,20 @@ class TestCreateShare:
     def test_no_session_raises(self, mock_api_client):
         with pytest.raises(Exception, match="No valid session"):
             mock_api_client.create_share("nobody@example.com", "ext-1")
+
+    def test_401_raises_session_expired_with_login_hint(
+        self, mock_api_client, mock_session_manager
+    ):
+        # The saved session has no refresh_token, so the 401 auto-refresh
+        # fails and _make_request raises SessionExpiredError before
+        # _handle_share_error ever sees the response.
+        _save_session(mock_session_manager)
+        resp = MagicMock(status_code=401)
+        resp.json.return_value = {"detail": "unauthorized"}
+        mock_api_client.session.request.return_value = resp
+
+        with pytest.raises(SessionExpiredError, match="Please log in again"):
+            mock_api_client.create_share("test@example.com", "ext-1")
 
 
 class TestRevokeShare:
