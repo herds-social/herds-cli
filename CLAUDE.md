@@ -49,7 +49,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full domain map: module descripti
 
 - **Auth**: Two client types — `web` (cookies) and `mobile` (Bearer token). Resolved via `CommandBase.setup_session()` → `APIClient.load_session_auth()`.
 - **Errors**: Helpers print a message then raise `HerdsError`. `HerdsGroup` at CLI boundary catches and exits.
-- **Output**: All commands respect `--format json|text|auto`. The default is `auto` — `text` when stdout is a TTY, `json` when piped/redirected. Status messages always go to stderr (via `OutputFormatter.print_*`); `json` mode also writes a JSON dump on stdout, while `text` mode leaves stdout empty.
+- **Output**: All commands respect `--format json|text|auto`. The default is `auto` — `text` when stdout is a TTY, `json` when piped/redirected. Status messages always go to stderr (via `OutputFormatter.print_*`); `json` mode also writes a JSON dump on stdout, while `text` mode leaves stdout empty. Documented exception: `extractions share` prints the bare share URL on stdout in text mode and resolves a default `auto` to text even when piped, so `herds extractions share <id> | pbcopy` yields the URL.
 
 ## Debugging Cross-Stack Issues
 

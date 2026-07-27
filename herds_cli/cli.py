@@ -239,6 +239,9 @@ def cli(
     # downstream only see "text" or "json". TTY check is on stdout because
     # that's the channel JSON would land on; stdin's TTY status is checked
     # separately by interactive pickers (see cmd_calendar._is_interactive).
+    # `extractions share` needs the pre-resolution value: it resolves
+    # "auto" to text even when piped (pipeable-URL contract).
+    raw_output_format = config_obj.output_format
     config_obj.output_format = resolve_format_default(
         config_obj.output_format, sys.stdout.isatty()
     )
@@ -280,6 +283,10 @@ def cli(
     # of flags (e.g. `image upload --poll` vs. an explicit `--format json`)
     # use this to avoid false-positive rejections of the default value.
     ctx.obj["_format_explicit"] = output_format is not None
+    # Pre-resolution --format value ("auto" whenever no layer chose a
+    # concrete json/text). `extractions share` reads this to keep its
+    # stdout URL pipeable.
+    ctx.obj["_raw_format"] = raw_output_format
 
 
 # Register command groups

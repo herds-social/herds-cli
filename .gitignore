@@ -208,3 +208,4 @@ herds-cli-config.json
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+.claude/settings.local.json
