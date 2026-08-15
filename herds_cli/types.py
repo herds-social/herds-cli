@@ -438,9 +438,11 @@ class ImageV2Response(TypedDict, total=False):
 class PingResponse(TypedDict, total=False):
     """Response from GET /ping.
 
-    Always returned with HTTP 200 — even when MongoDB is unreachable, so
-    operators can still see which deployment they're hitting. Identity
-    fields degrade to None rather than failing the request.
+    Returned with HTTP 200 even when MongoDB is unreachable, so
+    operators can still see which deployment they are hitting. Identity
+    fields (supabase_ref, mongo_db, git_sha) populate only for an
+    authenticated caller. They degrade to None rather than failing the
+    request.
     """
 
     message: str

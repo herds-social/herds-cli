@@ -1,13 +1,16 @@
 """
-Ping command — verify the Herds server is reachable and show its
+Ping command: verify the Herds server is reachable and show its
 deployment identity (env, Supabase ref, Mongo DB, git SHA).
 
-The /ping endpoint is unauthenticated and always returns HTTP 200,
-so this command works without a session. Exit code reflects only
-HTTP reachability — the body is rendered for inspection but does
-not influence success/failure. Callers that need finer-grained
-health checks (e.g. Mongo connectivity) can parse the JSON output.
+This command requires a session. The server answers HTTP 200 for an
+authenticated caller. Identity fields (supabase_ref, mongo_db, git_sha)
+populate only when the request carries credentials. Exit code reflects
+only HTTP reachability. The body is rendered for inspection but does
+not influence success or failure. Callers that need finer health
+checks (for example Mongo connectivity) can parse the JSON output.
 """
+
+from typing import Optional
 
 import click
 
@@ -18,10 +21,14 @@ from herds_cli.types import PingResponse
 
 
 @click.command()
+@click.option("--email", help="Email address (autodetect if only one session)")
 @click.pass_context
-def ping(ctx: click.Context) -> None:
+def ping(ctx: click.Context, email: Optional[str]) -> None:
     """Ping the Herds server and show its deployment identity."""
     cmd = CommandBase(ctx)
+    email = cmd.setup_session(email, show_client_type=True)
+    cmd.load_session_auth(email)
+
     url = f"{cmd.api_client.base_url}/ping"
     response = cmd.api_client._make_request("GET", url)
 
