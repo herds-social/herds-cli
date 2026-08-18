@@ -13,7 +13,7 @@ from .cmd_user_settings import user_settings
 from .cmd_calendar import calendar
 from .cmd_ping import ping
 from .cmd_url import url
-from .cmd_extractions import extractions
+from .cmd_sources import sources
 
 __all__ = [
     "user",
@@ -25,5 +25,5 @@ __all__ = [
     "calendar",
     "ping",
     "url",
-    "extractions",
+    "sources",
 ]

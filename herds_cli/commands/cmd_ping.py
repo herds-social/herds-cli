@@ -1,12 +1,12 @@
 """
 Ping command — verify the Herds server is reachable and show its
-deployment identity (env, Supabase ref, Mongo DB, git SHA).
+deployment identity (env, Supabase ref, git SHA, PR, deploy time).
 
 The /ping endpoint is unauthenticated and always returns HTTP 200,
 so this command works without a session. Exit code reflects only
-HTTP reachability — the body is rendered for inspection but does
+HTTP reachability. The body is rendered for inspection but does
 not influence success/failure. Callers that need finer-grained
-health checks (e.g. Mongo connectivity) can parse the JSON output.
+health checks can parse the JSON output.
 """
 
 import click
@@ -69,8 +69,8 @@ def _evaluate_ping(data: PingResponse) -> int:
     Policy: **always 0 on HTTP 200**. The caller has already verified
     the request reached the server; this function intentionally ignores
     the body so ``herds ping`` reports only reachability. Scripts that
-    care about Mongo connectivity or deployment identity can parse the
-    JSON output themselves and apply their own predicates.
+    care about deployment identity can parse the JSON output themselves
+    and apply their own predicates.
     """
     del data  # body intentionally ignored; signature kept for policy evolution
     return 0

@@ -2,7 +2,7 @@
 URL submission commands for the Herds CLI.
 
 Submit URLs for server-side event extraction; optional --poll waits through
-processing and renders extracted events via the shared extractions helpers.
+processing and renders extracted events via the shared sources helpers.
 """
 
 import click
@@ -10,9 +10,9 @@ import click
 from herds_cli.core.base import get_or_detect_session_email
 from herds_cli.core.exceptions import HerdsError
 from herds_cli.output import OutputFormatter
-from herds_cli.commands.cmd_extractions import (
-    display_extraction_events,
-    poll_extraction_to_completion,
+from herds_cli.commands.cmd_sources import (
+    display_source_events,
+    poll_source_to_completion,
 )
 
 
@@ -98,8 +98,13 @@ def submit(ctx, target_url, email, mock, add_to_calendar, poll):
                 "Submit response missing event_source_id; cannot poll for status"
             )
             raise HerdsError("submit response missing event_source_id")
-        poll_extraction_to_completion(api_client, email, event_source_id)
-        display_extraction_events(ctx, email, event_source_id)
+        poll_source_to_completion(api_client, email, event_source_id)
+        display_source_events(
+            ctx,
+            email,
+            event_source_id,
+            empty_warning="No events were extracted from this URL",
+        )
         return
 
     if output_format == "json":

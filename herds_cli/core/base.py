@@ -238,17 +238,28 @@ class EventCommandBase(CommandBase):
         title = event_data.get("title", "Untitled")
         category = event_data.get("category_level_1", "Unknown category")
 
+        if event_data.get("item_type") == "deleted_event":
+            title, event_id, deleted_at = _tombstone_fields(event_data)
+            OutputFormatter.print_info(f"Title: {escape(title)}")
+            if event_id:
+                OutputFormatter.print_info(f"Event ID: {escape(event_id)}")
+            OutputFormatter.print_info(f"Deleted: {escape(deleted_at)}")
+            return
+
         # Extract date info from v2 nested structure
         date_info = event_data.get("date_info", {})
         raw_date = date_info.get("raw", {}).get("date") or "Unknown date"
         local_info = date_info.get("local", {})
         local_date = local_info.get("date_start") or "Unknown date"
         local_time = local_info.get("time_start") or ""
+        event_tz = local_info.get("timezone") or ""
 
         # Format display date
         display_date = raw_date if raw_date != "Unknown date" else local_date
         if local_time:
             display_date += f" at {local_time}"
+        if event_tz:
+            display_date += f" ({event_tz})"
 
         # Extract location info from v2 nested structure
         location_info = event_data.get("location", {})
@@ -282,10 +293,11 @@ class EventCommandBase(CommandBase):
         event_id = event_data.get("id")
         if event_id:
             OutputFormatter.print_info(f"Event ID: {escape(str(event_id))}")
-        # Join key to `herds extractions get/events`; see
-        # EventV2.extraction_id.
+        source_id = event_data.get("source_id")
+        if source_id:
+            OutputFormatter.print_info(f"Source ID: {escape(str(source_id))}")
         extraction_id = event_data.get("extraction_id")
-        if extraction_id:
+        if extraction_id and extraction_id != source_id:
             OutputFormatter.print_info(
                 f"Extraction ID: {escape(str(extraction_id))}"
             )
@@ -478,6 +490,14 @@ def extract_user_id_from_session(session_manager: SessionManager, email: str) ->
     raise UserIdNotFoundError(email)
 
 
+def _tombstone_fields(event: EventV2) -> tuple[str, Optional[str], str]:
+    """Title, id, and deleted_at for a feed tombstone row."""
+    title = event.get("title") or "Deleted event"
+    event_id = event.get("id")
+    deleted_at = event.get("deleted_at") or "unknown time"
+    return str(title), (str(event_id) if event_id else None), str(deleted_at)
+
+
 def display_events_summary(events: List[EventV2]) -> None:
     """Display a formatted summary of events.
 
@@ -494,6 +514,15 @@ def display_events_summary(events: List[EventV2]) -> None:
 
     OutputFormatter.print_info("Events Summary:")
     for i, event in enumerate(events, 1):
+        if event.get("item_type") == "deleted_event":
+            title, event_id, deleted_at = _tombstone_fields(event)
+            id_suffix = f" (id {escape(event_id)})" if event_id else ""
+            OutputFormatter.print_info(
+                f"  {i}. {escape(title)} - deleted {escape(deleted_at)}"
+                f"{id_suffix}"
+            )
+            continue
+
         parent_title = event.get("parent_title")
         title = event.get("title", "Untitled")
         category = event.get("category_level_1", "Unknown category")
@@ -504,11 +533,14 @@ def display_events_summary(events: List[EventV2]) -> None:
         local_info = date_info.get("local", {})
         local_date = local_info.get("date_start") or "Unknown date"
         local_time = local_info.get("time_start") or ""
+        event_tz = local_info.get("timezone") or ""
 
         # Format display date
         display_date = raw_date if raw_date != "Unknown date" else local_date
         if local_time:
             display_date += f" at {local_time}"
+        if event_tz:
+            display_date += f" ({event_tz})"
 
         # Extract location info from v2 nested structure
         location_info = event.get("location", {})

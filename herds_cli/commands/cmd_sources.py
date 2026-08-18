@@ -1,8 +1,8 @@
 """
-Generic extraction-status commands for the Herds CLI.
+Source commands for the Herds CLI.
 
-Read-side facade over /api/extractions (URL and image jobs). Shared poll/display
-helpers are exported for herds url submit --poll.
+Read-side facade over /api/sources (URL, image, and bookmark). Shared
+poll/display helpers are exported for herds url submit --poll.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from herds_cli.calendar_status_display import ReconnectProviderResolver
 from herds_cli.core.base import APIResponseHandler, CommandBase, EventCommandBase
 from herds_cli.core.exceptions import HerdsError
 from herds_cli.output import OutputFormatter, console
-from herds_cli.types import EventV2, ExtractionResponse, ShareCommandOutput
+from herds_cli.types import EventV2, ShareCommandOutput, SourceResponse
 
 POLL_INTERVAL_SECS = 2.0
 POLL_TIMEOUT_SECS = 180.0
@@ -30,99 +30,120 @@ _TERMINAL_STATUSES = frozenset({"completed", "failed"})
 
 
 @click.group()
-def extractions():
-    """Extraction history and status commands."""
+def sources():
+    """Source inbox, status, share, and reprocess commands."""
     pass
 
 
-def _source_label(extraction: ExtractionResponse) -> str:
-    if extraction.get("source_type") == "url":
-        url_detail = extraction.get("url") or {}
+def _source_label(source: SourceResponse) -> str:
+    source_type = source.get("source_type")
+    if source_type == "url":
+        url_detail = source.get("url") or {}
         return url_detail.get("submitted_url", "unknown")
-    image_detail = extraction.get("image") or {}
-    return image_detail.get("image_name", "unnamed")
+    if source_type == "image":
+        image_detail = source.get("image") or {}
+        return image_detail.get("image_name", "unnamed")
+    if source_type == "bookmark":
+        return source.get("bookmark_source_id") or "unknown"
+    return "unknown"
 
 
-def _event_count_display(extraction: ExtractionResponse) -> str:
-    status = extraction.get("extraction_status", "")
+def _event_count_display(source: SourceResponse) -> str:
+    status = source.get("extraction_status", "")
     if status not in _TERMINAL_STATUSES:
         return "-"
-    count = extraction.get("event_count", 0)
+    count = source.get("event_count", 0)
     return f"{count} events"
 
 
-def _is_unacknowledged_terminal(extraction: ExtractionResponse) -> bool:
-    status = extraction.get("extraction_status", "")
+def _is_unacknowledged_terminal(source: SourceResponse) -> bool:
+    status = source.get("extraction_status", "")
     if status not in _TERMINAL_STATUSES:
         return False
-    return extraction.get("acknowledged_at") is None
+    return source.get("acknowledged_at") is None
 
 
-def _format_list_row(index: int, extraction: ExtractionResponse) -> str:
-    extraction_id = extraction.get("extraction_id", "unknown")
-    source_type = extraction.get("source_type", "unknown")
-    status = extraction.get("extraction_status", "unknown")
-    source_label = _source_label(extraction)
-    created_at = extraction.get("created_at", "unknown")
+def _format_list_row(index: int, source: SourceResponse) -> str:
+    source_id = source.get("source_id", "unknown")
+    source_type = source.get("source_type", "unknown")
+    status = source.get("extraction_status", "unknown")
+    source_label = _source_label(source)
+    created_at = source.get("created_at", "unknown")
     row = (
-        f"  {index}. [{extraction_id}] {source_type:<5} {status:<10} "
-        f"{_event_count_display(extraction):<8} {source_label:<28} {created_at}"
+        f"  {index}. [{source_id}] {source_type:<8} {status:<10} "
+        f"{_event_count_display(source):<8} {source_label:<28} {created_at}"
     )
     if status == "failed":
-        error_type = extraction.get("extraction_error_type")
+        error_type = source.get("extraction_error_type")
         if error_type:
             row += f" ({error_type})"
-    if _is_unacknowledged_terminal(extraction):
+    if _is_unacknowledged_terminal(source):
         row += " [unread]"
     return row
 
 
-def _display_extraction_summary(extraction: ExtractionResponse) -> None:
-    """Print a human-readable extraction status summary."""
-    extraction_id = extraction.get("extraction_id", "unknown")
-    OutputFormatter.print_info(f"Extraction ID: {extraction_id}")
-    OutputFormatter.print_info(f"Source type: {extraction.get('source_type', 'unknown')}")
+def _yes_no(value: bool) -> str:
+    return "yes" if value else "no"
+
+
+def _display_source_summary(source: SourceResponse) -> None:
+    """Print a human-readable source status summary."""
+    source_id = source.get("source_id", "unknown")
+    OutputFormatter.print_info(f"Source ID: {source_id}")
+    OutputFormatter.print_info(f"Source type: {source.get('source_type', 'unknown')}")
     OutputFormatter.print_info(
-        f"Status: {extraction.get('extraction_status', 'unknown')}"
+        f"Status: {source.get('extraction_status', 'unknown')}"
     )
 
-    error_type = extraction.get("extraction_error_type")
+    error_type = source.get("extraction_error_type")
     if error_type:
         OutputFormatter.print_info(f"Error type: {error_type}")
 
-    OutputFormatter.print_info(f"Event count: {extraction.get('event_count', 0)}")
+    OutputFormatter.print_info(f"Event count: {source.get('event_count', 0)}")
+    OutputFormatter.print_info(
+        f"Can reprocess: {_yes_no(bool(source.get('can_reprocess')))}"
+    )
 
-    if extraction.get("source_type") == "url":
-        url_detail = extraction.get("url") or {}
+    share_url = source.get("share_url")
+    if share_url:
+        OutputFormatter.print_info(f"Share URL: {share_url}")
+
+    source_type = source.get("source_type")
+    if source_type == "url":
+        url_detail = source.get("url") or {}
         OutputFormatter.print_info(f"URL: {url_detail.get('submitted_url', 'unknown')}")
         OutputFormatter.print_info(
             f"Links: {url_detail.get('fetched_link_count', 0)}/"
             f"{url_detail.get('candidate_link_count', 0)} fetched"
         )
-    elif extraction.get("source_type") == "image":
-        image_detail = extraction.get("image") or {}
+    elif source_type == "image":
+        image_detail = source.get("image") or {}
         OutputFormatter.print_info(f"Image: {image_detail.get('image_name', 'unknown')}")
         OutputFormatter.print_info(
             f"Media type: {image_detail.get('image_media_type', 'unknown')}"
         )
+    elif source_type == "bookmark":
+        OutputFormatter.print_info(
+            f"Bookmark source: {source.get('bookmark_source_id', 'unknown')}"
+        )
 
-    ack_at = extraction.get("acknowledged_at")
+    ack_at = source.get("acknowledged_at")
     if ack_at:
         OutputFormatter.print_info(f"Acknowledged: {ack_at}")
     else:
         OutputFormatter.print_info("Acknowledged: no")
 
-    OutputFormatter.print_info(f"Created: {extraction.get('created_at', 'unknown')}")
-    updated_at = extraction.get("updated_at")
+    OutputFormatter.print_info(f"Created: {source.get('created_at', 'unknown')}")
+    updated_at = source.get("updated_at")
     if updated_at:
         OutputFormatter.print_info(f"Updated: {updated_at}")
 
 
-def _poll_status_text(extraction: ExtractionResponse) -> str:
-    status = extraction.get("extraction_status", "processing")
+def _poll_status_text(source: SourceResponse) -> str:
+    status = source.get("extraction_status", "processing")
     if status == "pending":
         return "Waiting for extraction..."
-    url_detail = extraction.get("url")
+    url_detail = source.get("url")
     if url_detail:
         fetched = url_detail.get("fetched_link_count", 0)
         candidate = url_detail.get("candidate_link_count", 0)
@@ -133,35 +154,34 @@ def _poll_status_text(extraction: ExtractionResponse) -> str:
     return "Extracting events..."
 
 
-def poll_extraction_to_completion(
+def poll_source_to_completion(
     api_client: APIClient,
     email: str,
-    extraction_id: str,
-) -> ExtractionResponse:
-    """Poll GET /api/extractions/{id} until terminal or timeout."""
+    source_id: str,
+) -> SourceResponse:
+    """Poll GET /api/sources/{id} until terminal or timeout."""
     deadline = time.monotonic() + POLL_TIMEOUT_SECS
     last_status = "unknown"
 
     with Status("Waiting for extraction...", console=console, spinner="dots") as status:
         while True:
-            extraction = api_client.get_extraction(email, extraction_id)
-            last_status = extraction.get("extraction_status", "unknown")
-            job_status = last_status
+            source = api_client.get_source(email, source_id)
+            last_status = source.get("extraction_status", "unknown")
 
-            if job_status == "failed":
+            if last_status == "failed":
                 status.stop()
                 OutputFormatter.print_error("Event extraction failed")
-                error_type = extraction.get("extraction_error_type")
+                error_type = source.get("extraction_error_type")
                 if error_type:
                     OutputFormatter.print_error(f"  {error_type}")
                 raise HerdsError("event extraction failed")
 
-            if job_status == "completed":
+            if last_status == "completed":
                 status.stop()
                 OutputFormatter.print_success("Extraction completed")
                 break
 
-            status.update(_poll_status_text(extraction))
+            status.update(_poll_status_text(source))
 
             if time.monotonic() >= deadline:
                 status.stop()
@@ -173,10 +193,10 @@ def poll_extraction_to_completion(
 
             time.sleep(POLL_INTERVAL_SECS)
 
-    return extraction
+    return source
 
 
-def _render_extraction_events(ctx: click.Context, events: List[EventV2]) -> None:
+def _render_source_events(ctx: click.Context, events: List[EventV2]) -> None:
     """Render pre-fetched events with the standard event display."""
     OutputFormatter.print_success(f"Extracted {len(events)} event(s)")
     event_cmd = EventCommandBase(ctx)
@@ -185,30 +205,28 @@ def _render_extraction_events(ctx: click.Context, events: List[EventV2]) -> None
     for i, event in enumerate(events, 1):
         if len(events) > 1:
             OutputFormatter.print_info(f"--- Event {i} of {len(events)} ---")
-        event_cmd.display_event_details(cast(EventV2, event), resolver=resolver)
+        event_cmd.display_event_details(event, resolver=resolver)
 
 
-def display_extraction_events(
+def display_source_events(
     ctx: click.Context,
     email: str,
-    extraction_id: str,
+    source_id: str,
     *,
-    empty_warning: str = "No events were extracted from this URL",
+    empty_warning: str = "No events were extracted",
 ) -> None:
-    """Fetch and render events for one extraction."""
+    """Fetch and render events for one source."""
     api_client: APIClient = ctx.obj["api_client"]
     timezone = ctx.obj["timezone"]
 
     OutputFormatter.print_info("Fetching extracted events...")
-    events = api_client.get_extraction_events(
-        email, extraction_id, timezone=timezone
-    )
+    events = api_client.get_source_events(email, source_id, timezone=timezone)
 
     if not events:
         OutputFormatter.print_warning(empty_warning)
         return
 
-    _render_extraction_events(ctx, events)
+    _render_source_events(ctx, events)
 
 
 def parse_before_timestamp(value: str, tz_name: str) -> str:
@@ -231,7 +249,7 @@ def parse_before_timestamp(value: str, tz_name: str) -> str:
     return utc_dt.strftime("%Y-%m-%dT%H:%M:%S") + "Z"
 
 
-@extractions.command("list")
+@sources.command("list")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.option(
     "--status",
@@ -240,7 +258,7 @@ def parse_before_timestamp(value: str, tz_name: str) -> str:
 )
 @click.option(
     "--source-type",
-    type=click.Choice(["url", "image"]),
+    type=click.Choice(["url", "image", "bookmark"]),
     help="Filter by source type",
 )
 @click.option(
@@ -254,7 +272,7 @@ def parse_before_timestamp(value: str, tz_name: str) -> str:
     default=50,
     type=click.IntRange(min=1, max=200),
     show_default=True,
-    help="Maximum number of extractions to return",
+    help="Maximum number of sources to return",
 )
 @click.option(
     "--offset",
@@ -264,23 +282,21 @@ def parse_before_timestamp(value: str, tz_name: str) -> str:
     help="Pagination offset",
 )
 @click.pass_context
-def list_extractions_cmd(
-    ctx, email, status, source_type, acknowledged, limit, offset
-):
-    """List extraction history with optional filters."""
+def list_sources_cmd(ctx, email, status, source_type, acknowledged, limit, offset):
+    """List sources with optional filters."""
     cmd = CommandBase(ctx)
     email = cmd.setup_session(email, show_client_type=True)
     cmd.validate_session(email)
     cmd.load_session_auth(email)
 
     OutputFormatter.print_info(
-        f"Retrieving extractions (limit: {limit}, offset: {offset})..."
+        f"Retrieving sources (limit: {limit}, offset: {offset})..."
     )
 
     try:
-        result = cmd.api_client.list_extractions(
+        result = cmd.api_client.list_sources(
             email,
-            status=status,
+            extraction_status=status,
             source_type=source_type,
             acknowledged=acknowledged,
             limit=limit,
@@ -288,15 +304,15 @@ def list_extractions_cmd(
         )
     except Exception as exc:
         OutputFormatter.print_error(str(exc))
-        raise HerdsError("failed to list extractions") from exc
+        raise HerdsError("failed to list sources") from exc
 
-    items = result.get("extractions", [])
+    items = result.get("sources", [])
     total_count = result.get("total_count", 0)
     next_offset = result.get("next_offset")
 
     if items:
         OutputFormatter.print_success(
-            f"Found {total_count} extraction(s) (showing {len(items)})"
+            f"Found {total_count} source(s) (showing {len(items)})"
         )
         current_page = (offset // limit) + 1
         total_pages = (total_count + limit - 1) // limit
@@ -305,44 +321,44 @@ def list_extractions_cmd(
                 f"Page {current_page} of {total_pages} "
                 f"(use --offset {next_offset or (offset + limit)} to see next page)"
             )
-        OutputFormatter.print_info("Extractions:")
-        for i, extraction in enumerate(items, 1):
-            OutputFormatter.print_info(escape(_format_list_row(i, extraction)))
+        OutputFormatter.print_info("Sources:")
+        for i, source in enumerate(items, 1):
+            OutputFormatter.print_info(escape(_format_list_row(i, source)))
     else:
-        OutputFormatter.print_warning("No extractions found")
+        OutputFormatter.print_warning("No sources found")
 
     APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
-@extractions.command("get")
-@click.argument("extraction_id")
+@sources.command("get")
+@click.argument("source_id")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.pass_context
-def get_extraction_cmd(ctx, extraction_id, email):
-    """Get one extraction's status by ID."""
+def get_source_cmd(ctx, source_id, email):
+    """Get one source's status by ID."""
     cmd = CommandBase(ctx)
     email = cmd.setup_session(email, show_client_type=True)
     cmd.validate_session(email)
     cmd.load_session_auth(email)
 
-    OutputFormatter.print_info(f"Retrieving extraction: {extraction_id}")
+    OutputFormatter.print_info(f"Retrieving source: {source_id}")
 
     try:
-        result = cmd.api_client.get_extraction(email, extraction_id)
+        result = cmd.api_client.get_source(email, source_id)
     except Exception as exc:
         OutputFormatter.print_error(str(exc))
-        raise HerdsError(f"failed to get extraction {extraction_id}") from exc
+        raise HerdsError(f"failed to get source {source_id}") from exc
 
-    _display_extraction_summary(result)
+    _display_source_summary(result)
     APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
-@extractions.command("events")
-@click.argument("extraction_id")
+@sources.command("events")
+@click.argument("source_id")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.pass_context
-def events_cmd(ctx, extraction_id, email):
-    """Fetch and display an extraction's events."""
+def events_cmd(ctx, source_id, email):
+    """Fetch and display a source's events."""
     cmd = CommandBase(ctx)
     email = cmd.setup_session(email, show_client_type=True)
     cmd.validate_session(email)
@@ -352,12 +368,12 @@ def events_cmd(ctx, extraction_id, email):
     timezone = ctx.obj["timezone"]
 
     try:
-        events = cmd.api_client.get_extraction_events(
-            email, extraction_id, timezone=timezone
+        events = cmd.api_client.get_source_events(
+            email, source_id, timezone=timezone
         )
     except Exception as exc:
         OutputFormatter.print_error(str(exc))
-        raise HerdsError(f"failed to get events for extraction {extraction_id}") from exc
+        raise HerdsError(f"failed to get events for source {source_id}") from exc
 
     if output_format == "json":
         APIResponseHandler.format_and_output(events, output_format)
@@ -367,33 +383,31 @@ def events_cmd(ctx, extraction_id, email):
         OutputFormatter.print_warning("No events were extracted")
         return
 
-    _render_extraction_events(ctx, events)
+    _render_source_events(ctx, events)
 
 
-@extractions.command("ack")
-@click.argument("extraction_ids", nargs=-1)
+@sources.command("ack")
+@click.argument("source_ids", nargs=-1)
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.option(
     "--before",
-    help="Acknowledge extractions updated before this timestamp (ISO 8601 or YYYY-MM-DD)",
+    help="Acknowledge sources updated before this timestamp (ISO 8601 or YYYY-MM-DD)",
 )
 @click.option(
     "--all",
     "ack_all",
     is_flag=True,
-    help="Acknowledge every terminal extraction",
+    help="Acknowledge every terminal source",
 )
 @click.pass_context
-def ack_cmd(ctx, extraction_ids, email, before, ack_all):
-    """Acknowledge terminal extractions."""
-    ids: List[str] = list(extraction_ids)
+def ack_cmd(ctx, source_ids, email, before, ack_all):
+    """Acknowledge terminal sources."""
+    ids: List[str] = list(source_ids)
 
     if ack_all and (ids or before):
-        raise click.UsageError("--all cannot be combined with extraction IDs or --before")
+        raise click.UsageError("--all cannot be combined with source IDs or --before")
     if not ack_all and not before and not ids:
-        raise click.UsageError(
-            "Provide extraction ID(s), --before, or --all"
-        )
+        raise click.UsageError("Provide source ID(s), --before, or --all")
 
     cmd = CommandBase(ctx)
     email = cmd.setup_session(email, show_client_type=True)
@@ -405,22 +419,43 @@ def ack_cmd(ctx, extraction_ids, email, before, ack_all):
         before_utc = parse_before_timestamp(before, ctx.obj["timezone"])
 
     try:
-        result = cmd.api_client.acknowledge_extractions(
+        result = cmd.api_client.acknowledge_sources(
             email,
             before=before_utc,
-            extraction_ids=ids if ids else None,
+            source_ids=ids if ids else None,
         )
     except Exception as exc:
         OutputFormatter.print_error(str(exc))
-        raise HerdsError("failed to acknowledge extractions") from exc
+        raise HerdsError("failed to acknowledge sources") from exc
 
     count = result.get("acknowledged_count", 0)
-    OutputFormatter.print_success(f"Acknowledged {count} extraction(s)")
+    OutputFormatter.print_success(f"Acknowledged {count} source(s)")
     APIResponseHandler.format_and_output(result, cmd.output_format)
 
 
-@extractions.command("share")
-@click.argument("extraction_id")
+@sources.command("reprocess")
+@click.argument("source_id")
+@click.option("--email", help="Email address (autodetect if only one session)")
+@click.pass_context
+def reprocess_cmd(ctx, source_id, email):
+    """Retry a failed URL or image source."""
+    cmd = CommandBase(ctx)
+    email = cmd.setup_session(email, show_client_type=True)
+    cmd.validate_session(email)
+    cmd.load_session_auth(email)
+
+    try:
+        result = cmd.api_client.reprocess_source(email, source_id)
+    except Exception as exc:
+        OutputFormatter.print_error(str(exc))
+        raise HerdsError(f"failed to reprocess source {source_id}") from exc
+
+    OutputFormatter.print_success(f"Reprocessing source {source_id}")
+    APIResponseHandler.format_and_output(result, cmd.output_format)
+
+
+@sources.command("share")
+@click.argument("source_id")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.option(
     "--web-url",
@@ -430,43 +465,38 @@ def ack_cmd(ctx, extraction_ids, email, before, ack_all):
     ),
 )
 @click.pass_context
-def share_cmd(ctx, extraction_id, email, web_url):
-    """Mint (or return the existing) share link for an extraction.
+def share_cmd(ctx, source_id, email, web_url):
+    """Mint (or return the existing) share link for a source.
 
     The share URL (and nothing else) is printed on stdout - a deliberate
     exception, scoped to this command, to the usual empty-stdout text
-    convention - so `herds extractions share <id> | pbcopy` works
+    convention - so `herds sources share <id> | pbcopy` works
     directly. To keep that pipe working, a default `auto` format resolves
     to text here even when piped (every other command resolves a piped
     `auto` to json). Status messages stay on stderr. With --web-url, the
     stdout line is the rebuilt local URL instead.
 
     Scripts that want the token or the server URL explicitly can use:
-    `herds extractions share <id> --format json | jq -r .share_url`
+    `herds sources share <id> --format json | jq -r .share_url`
     """
     cmd = CommandBase(ctx)
     email = cmd.setup_session(email, show_client_type=True)
     cmd.validate_session(email)
     cmd.load_session_auth(email)
 
-    # An "auto" (default or explicit) resolved to json in cli() only because
-    # stdout is piped; honoring that here would put a JSON dump in the pipe
-    # the docstring promises a bare URL to. A chosen json/text still wins.
     output_format = cmd.output_format
     if ctx.obj.get("_raw_format") == "auto":
         output_format = "text"
 
     try:
-        result = cmd.api_client.create_share(email, extraction_id)
+        result = cmd.api_client.create_share(email, source_id)
     except Exception as exc:
         OutputFormatter.print_error(str(exc))
-        raise HerdsError(f"failed to share extraction {extraction_id}") from exc
+        raise HerdsError(f"failed to share source {source_id}") from exc
 
     share_url = result["share_url"]
     local_share_url: Optional[str] = None
     if web_url:
-        # The web app serves public share pages at /s/<token>; this mirrors
-        # the path the server bakes into share_url, rebuilt on a local base.
         local_share_url = f"{web_url.rstrip('/')}/s/{result['share_token']}"
 
     payload = cast(ShareCommandOutput, result)
@@ -481,16 +511,16 @@ def share_cmd(ctx, extraction_id, email, web_url):
         click.echo(local_share_url if local_share_url is not None else share_url)
 
 
-@extractions.command("unshare")
-@click.argument("extraction_id")
+@sources.command("unshare")
+@click.argument("source_id")
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.pass_context
-def unshare_cmd(ctx, extraction_id, email):
-    """Revoke an extraction's share link.
+def unshare_cmd(ctx, source_id, email):
+    """Revoke a source's share link.
 
     After revocation the public share page renders its
-    "link no longer active" state. Re-running `share` afterwards mints
-    a fresh token.
+    "link no longer active" state. Re-running `share` afterwards restores
+    the same URL. Bookmark revoke is rejected by the server.
     """
     cmd = CommandBase(ctx)
     email = cmd.setup_session(email, show_client_type=True)
@@ -498,10 +528,10 @@ def unshare_cmd(ctx, extraction_id, email):
     cmd.load_session_auth(email)
 
     try:
-        result = cmd.api_client.revoke_share(email, extraction_id)
+        result = cmd.api_client.revoke_share(email, source_id)
     except Exception as exc:
         OutputFormatter.print_error(str(exc))
-        raise HerdsError(f"failed to unshare extraction {extraction_id}") from exc
+        raise HerdsError(f"failed to unshare source {source_id}") from exc
 
     OutputFormatter.print_success("Share link revoked.")
     APIResponseHandler.format_and_output(result, cmd.output_format)

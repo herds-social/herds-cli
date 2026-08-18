@@ -31,12 +31,13 @@ from .types import (
     DeleteImageResponse,
     EventUserDataResponse,
     EventV2,
-    ExtractionListResponse,
-    ExtractionResponse,
     LoginResponse,
     RevokeShareResponse,
     SessionData,
     ShareResponse,
+    SourceListResponse,
+    SourceReprocessAck,
+    SourceResponse,
     UpdatePasswordResponse,
     UrlSubmissionResponse,
     UsageResponse,
@@ -862,7 +863,7 @@ class APIClient:
         if organizer is not None:
             data["organizer"] = organizer
         if email_contact is not None:
-            data["email_contact"] = email_contact
+            data["email"] = email_contact
         if phone is not None:
             data["phone"] = phone
         if website is not None:
@@ -879,8 +880,7 @@ class APIClient:
             data["apple_calendar_event_id"] = apple_calendar_event_id
         if google_calendar_event_id is not None:
             data["google_calendar_event_id"] = google_calendar_event_id
-        if outlook_calendar_event_id is not None:
-            data["outlook_calendar_event_id"] = outlook_calendar_event_id
+        del outlook_calendar_event_id
 
         response = self._make_request("PUT", url, json=data)
 
@@ -952,14 +952,12 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def get_extraction(
-        self, email: str, extraction_id: str
-    ) -> ExtractionResponse:
-        """Get one extraction's status by ID."""
+    def get_source(self, email: str, source_id: str) -> SourceResponse:
+        """Get one source's identity and current job fields."""
         if not self.load_session_auth(email):
             raise Exception(f"No valid session found for {email}. Please login first.")
 
-        endpoint = f"{self.base_url}/api/extractions/{extraction_id}"
+        endpoint = f"{self.base_url}/api/sources/{source_id}"
         response = self._make_request("GET", endpoint)
 
         if response.status_code == 200:
@@ -967,18 +965,18 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def get_extraction_events(
+    def get_source_events(
         self,
         email: str,
-        extraction_id: str,
+        source_id: str,
         *,
         timezone: str = "UTC",
     ) -> List[EventV2]:
-        """Get events extracted by one extraction job."""
+        """Get events for one source."""
         if not self.load_session_auth(email):
             raise Exception(f"No valid session found for {email}. Please login first.")
 
-        endpoint = f"{self.base_url}/api/extractions/{extraction_id}/events"
+        endpoint = f"{self.base_url}/api/sources/{source_id}/events"
         response = self._make_request("GET", endpoint, params={"timezone": timezone})
 
         if response.status_code == 200:
@@ -986,24 +984,24 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def list_extractions(
+    def list_sources(
         self,
         email: str,
         *,
-        status: Optional[str] = None,
+        extraction_status: Optional[str] = None,
         source_type: Optional[str] = None,
         acknowledged: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> ExtractionListResponse:
-        """List extraction history with optional filters."""
+    ) -> SourceListResponse:
+        """List sources with optional filters."""
         if not self.load_session_auth(email):
             raise Exception(f"No valid session found for {email}. Please login first.")
 
-        endpoint = f"{self.base_url}/api/extractions"
+        endpoint = f"{self.base_url}/api/sources"
         params: Dict[str, Any] = {"limit": limit, "offset": offset}
-        if status is not None:
-            params["status"] = status
+        if extraction_status is not None:
+            params["extraction_status"] = extraction_status
         if source_type is not None:
             params["source_type"] = source_type
         if acknowledged is not None:
@@ -1016,23 +1014,23 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def acknowledge_extractions(
+    def acknowledge_sources(
         self,
         email: str,
         *,
         before: Optional[str] = None,
-        extraction_ids: Optional[List[str]] = None,
+        source_ids: Optional[List[str]] = None,
     ) -> AcknowledgeResponse:
-        """Acknowledge terminal extractions."""
+        """Acknowledge terminal sources."""
         if not self.load_session_auth(email):
             raise Exception(f"No valid session found for {email}. Please login first.")
 
-        endpoint = f"{self.base_url}/api/extractions/acknowledge"
+        endpoint = f"{self.base_url}/api/sources/acknowledge"
         data: Dict[str, Any] = {}
         if before is not None:
             data["before"] = before
-        if extraction_ids is not None:
-            data["extraction_ids"] = extraction_ids
+        if source_ids is not None:
+            data["source_ids"] = source_ids
 
         response = self._make_request("POST", endpoint, json=data)
 
@@ -1041,32 +1039,44 @@ class APIClient:
         else:
             self.handle_api_error(response)
 
-    def _handle_share_error(
-        self, response: requests.Response, extraction_id: str
-    ) -> NoReturn:
-        """Map share-endpoint errors to friendly messages.
-
-        400/404 get tailored text per the share-link spec; everything else
-        falls through to the generic handle_api_error path. 401s never
-        normally reach here: callers run load_session_auth first, which
-        sets _current_session_email, so _make_request's refresh path
-        raises SessionExpiredError (with a login hint) on 401. Under
-        no_login that field stays unset and a 401 does land in the
-        generic branch.
-        """
-        if response.status_code == 404:
-            raise Exception(f"Extraction not found (or not yours): {extraction_id}")
-        elif response.status_code == 400:
-            raise Exception(f"Malformed extraction id: {extraction_id}")
-        else:
-            self.handle_api_error(response)
-
-    def create_share(self, email: str, extraction_id: str) -> ShareResponse:
-        """Mint (or return the existing) share link for an extraction."""
+    def reprocess_source(self, email: str, source_id: str) -> SourceReprocessAck:
+        """Retry a failed URL or image source."""
         if not self.load_session_auth(email):
             raise Exception(f"No valid session found for {email}. Please login first.")
 
-        endpoint = f"{self.base_url}/api/extractions/{extraction_id}/share"
+        endpoint = f"{self.base_url}/api/sources/{source_id}/reprocess"
+        response = self._make_request("POST", endpoint)
+
+        if response.status_code == 202:
+            return response.json()
+        else:
+            self.handle_api_error(response)
+
+    def _handle_share_error(
+        self, response: requests.Response, source_id: str
+    ) -> NoReturn:
+        """Map share-endpoint errors to friendly messages.
+
+        400/404/422 get tailored text; everything else falls through to
+        handle_api_error. 401s never normally reach here: callers run
+        load_session_auth first, which sets _current_session_email, so
+        _make_request's refresh path raises SessionExpiredError on 401.
+        """
+        if response.status_code == 404:
+            raise Exception(f"Source not found (or not yours): {source_id}")
+        elif response.status_code == 400:
+            raise Exception(f"Malformed source id: {source_id}")
+        elif response.status_code == 422:
+            raise Exception(f"Source {source_id} is not eligible")
+        else:
+            self.handle_api_error(response)
+
+    def create_share(self, email: str, source_id: str) -> ShareResponse:
+        """Mint (or return the existing) share link for a source."""
+        if not self.load_session_auth(email):
+            raise Exception(f"No valid session found for {email}. Please login first.")
+
+        endpoint = f"{self.base_url}/api/sources/{source_id}/share"
         response = self._make_request("POST", endpoint)
 
         # The server returns 201 for both a newly minted and a pre-existing
@@ -1074,17 +1084,17 @@ class APIClient:
         if response.status_code == 201:
             return response.json()
         else:
-            self._handle_share_error(response, extraction_id)
+            self._handle_share_error(response, source_id)
 
-    def revoke_share(self, email: str, extraction_id: str) -> RevokeShareResponse:
-        """Revoke an extraction's share link."""
+    def revoke_share(self, email: str, source_id: str) -> RevokeShareResponse:
+        """Revoke a source's share link."""
         if not self.load_session_auth(email):
             raise Exception(f"No valid session found for {email}. Please login first.")
 
-        endpoint = f"{self.base_url}/api/extractions/{extraction_id}/share"
+        endpoint = f"{self.base_url}/api/sources/{source_id}/share"
         response = self._make_request("DELETE", endpoint)
 
         if response.status_code == 204:
-            return {"extraction_id": extraction_id, "revoked": True}
+            return {"source_id": source_id, "revoked": True}
         else:
-            self._handle_share_error(response, extraction_id)
+            self._handle_share_error(response, source_id)

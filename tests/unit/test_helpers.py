@@ -85,7 +85,10 @@ class TestBuildEventUpdateData:
             google_calendar_event_id="google-1",
             outlook_calendar_event_id="outlook-1",
         )
-        assert len(result) == 20
+        assert result["email"] == "info@example.com"
+        assert "email_contact" not in result
+        assert "outlook_calendar_event_id" not in result
+        assert len(result) == 19
 
     def test_keyword_only_enforced(self):
         """Cannot pass positional arguments."""
@@ -101,7 +104,6 @@ class TestBuildEventUpdateData:
         assert result == {
             "apple_calendar_event_id": "a1",
             "google_calendar_event_id": "g1",
-            "outlook_calendar_event_id": "o1",
         }
 
 

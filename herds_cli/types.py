@@ -102,12 +102,13 @@ class DateInfoRaw(TypedDict, total=False):
 
 
 class DateInfoLocal(TypedDict, total=False):
-    """Date/time values localized to the requested timezone."""
+    """Date/time values in the event's own IANA timezone."""
 
     date_start: str
     date_end: str
     time_start: str
     time_end: str
+    timezone: str
 
 
 class DateInfo(TypedDict, total=False):
@@ -196,21 +197,26 @@ class EventV2(TypedDict, total=False):
     """Event object from the v2 API.
 
     The shared v2 event payload shape: returned by /api/events/v2 (lists),
-    GET/PUT /api/events/{id}, /api/extractions/{id}/events, and the
+    GET/PUT /api/events/{id}, /api/sources/{id}/events, and the
     image-upload extraction result. This captures the fields accessed by
     display_event_details() and display_events_summary(). The actual server
     response may contain additional fields not listed here; instances are
     unvalidated casts of raw JSON, so read fields with .get().
 
-    extraction_id (server PR herds-social/herds#293) is the join key to the
-    extractions API: the same id as ExtractionResponse.extraction_id and the
-    argument accepted by `herds extractions get|events`. Optional because
-    pre-#293 servers omit the key and current servers send an explicit null
-    for events with no owning extraction; treat missing and None identically.
+    source_id is the join key to the sources API. extraction_id is the
+    dual-run sibling and has the same string when both are set. Optional
+    because older servers omit them and current servers send an explicit
+    null for events with no owning source; treat missing and None identically.
+
+    item_type discriminates live events from feed tombstones
+    (`deleted_event`) on GET /api/events/v2.
     """
 
     id: str
+    source_id: Optional[str]
     extraction_id: Optional[str]
+    item_type: str
+    deleted_at: str
     parent_title: str
     title: str
     category_level_1: str
@@ -446,16 +452,17 @@ class PingResponse(TypedDict, total=False):
     message: str
     env: Optional[str]
     supabase_ref: Optional[str]
-    mongo_db: Optional[str]
     git_sha: Optional[str]
+    pr_number: Optional[int]
+    deployed_at: Optional[str]
 
 
 # ---------------------------------------------------------------------------
-# URL submission + generic extractions API
+# URL submission + sources API
 # ---------------------------------------------------------------------------
 
 ExtractionStatus = Literal["pending", "processing", "completed", "failed"]
-ExtractionSourceType = Literal["url", "image"]
+SourceType = Literal["url", "image", "bookmark"]
 
 
 class UrlSubmissionResponse(TypedDict):
@@ -467,7 +474,7 @@ class UrlSubmissionResponse(TypedDict):
 
 
 class UrlExtractionDetail(TypedDict):
-    """URL-source detail on GET /api/extractions/{id}."""
+    """URL-source detail on GET /api/sources/{id}."""
 
     submitted_url: str
     candidate_link_count: int
@@ -475,20 +482,23 @@ class UrlExtractionDetail(TypedDict):
 
 
 class ImageExtractionDetail(TypedDict):
-    """Image-source detail on GET /api/extractions/{id}."""
+    """Image-source detail on GET /api/sources/{id}."""
 
     image_name: str
     image_media_type: str
 
 
-class ExtractionResponse(TypedDict, total=False):
-    """One extraction job from the generic extractions API."""
+class SourceResponse(TypedDict, total=False):
+    """One source from GET /api/sources and GET /api/sources/{id}."""
 
-    extraction_id: str
-    source_type: ExtractionSourceType
+    source_id: str
+    source_type: SourceType
     extraction_status: ExtractionStatus
     extraction_error_type: Optional[str]
     event_count: int
+    can_reprocess: bool
+    share_url: Optional[str]
+    bookmark_source_id: Optional[str]
     url: UrlExtractionDetail
     image: ImageExtractionDetail
     created_at: str
@@ -496,28 +506,35 @@ class ExtractionResponse(TypedDict, total=False):
     acknowledged_at: Optional[str]
 
 
-class ExtractionListResponse(TypedDict):
-    """Paginated list from GET /api/extractions."""
+class SourceListResponse(TypedDict):
+    """Paginated list from GET /api/sources."""
 
-    extractions: List[ExtractionResponse]
+    sources: List[SourceResponse]
     total_count: int
     has_more: bool
     next_offset: Optional[int]
 
 
 class AcknowledgeResponse(TypedDict):
-    """Response from POST /api/extractions/acknowledge."""
+    """Response from POST /api/sources/acknowledge."""
 
     acknowledged_count: int
 
 
+class SourceReprocessAck(TypedDict):
+    """Response from POST /api/sources/{source_id}/reprocess."""
+
+    source_id: str
+    extraction_status: ExtractionStatus
+
+
 class ShareResponse(TypedDict):
-    """Response from POST /api/extractions/{extraction_id}/share.
+    """Response from POST /api/sources/{source_id}/share.
 
     share_url is the absolute public share-page URL, built by the server
     as <web-base>/s/<share_token>. share_token is exposed separately so
     clients can rebuild the URL on another web base (see
-    `extractions share --web-url`).
+    `sources share --web-url`).
     """
 
     share_token: str
@@ -525,7 +542,7 @@ class ShareResponse(TypedDict):
 
 
 class ShareCommandOutput(ShareResponse, total=False):
-    """JSON payload of `herds extractions share`.
+    """JSON payload of `herds sources share`.
 
     The verbatim server ShareResponse, plus local_share_url synthesized
     by the CLI when --web-url is passed.
@@ -535,11 +552,11 @@ class ShareCommandOutput(ShareResponse, total=False):
 
 
 class RevokeShareResponse(TypedDict):
-    """CLI-synthesized result for DELETE /api/extractions/{extraction_id}/share.
+    """CLI-synthesized result for DELETE /api/sources/{source_id}/share.
 
     The server returns 204 with no body; the CLI synthesizes this shape for
     json output, mirroring DeleteEventResponse.
     """
 
-    extraction_id: str
+    source_id: str
     revoked: bool

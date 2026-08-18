@@ -45,9 +45,9 @@ SAMPLE_EVENT = {
 }
 
 
-def _extraction_response(*, status="processing", **extra):
+def _source_response(*, status="processing", **extra):
     body = {
-        "extraction_id": "src-001",
+        "source_id": "src-001",
         "source_type": "url",
         "extraction_status": status,
         "event_count": 0,
@@ -193,7 +193,7 @@ class TestUrlSubmit:
 
 
 class TestUrlSubmitPoll:
-    @patch("herds_cli.commands.cmd_extractions.time.sleep")
+    @patch("herds_cli.commands.cmd_sources.time.sleep")
     def test_poll_completes_and_displays_events(
         self, mock_sleep, cli_runner, cli_obj
     ):
@@ -202,8 +202,8 @@ class TestUrlSubmitPoll:
         cli_obj["format"] = "text"
         cli_obj["api_client"].session.request.side_effect = [
             _make_response(200, SUBMIT_RESPONSE),
-            _make_response(200, _extraction_response(status="processing")),
-            _make_response(200, _extraction_response(status="completed", event_count=1)),
+            _make_response(200, _source_response(status="processing")),
+            _make_response(200, _source_response(status="completed", event_count=1)),
             _make_response(200, [SAMPLE_EVENT]),
         ]
 
@@ -218,7 +218,7 @@ class TestUrlSubmitPoll:
         assert "Jazz Night" in out
         assert "Extraction completed" in out
 
-    @patch("herds_cli.commands.cmd_extractions.time.sleep")
+    @patch("herds_cli.commands.cmd_sources.time.sleep")
     def test_poll_failed_exits_with_error_type(
         self, mock_sleep, cli_runner, cli_obj
     ):
@@ -229,7 +229,7 @@ class TestUrlSubmitPoll:
             _make_response(200, SUBMIT_RESPONSE),
             _make_response(
                 200,
-                _extraction_response(
+                _source_response(
                     status="failed", extraction_error_type="url_fetch_error"
                 ),
             ),
@@ -246,8 +246,8 @@ class TestUrlSubmitPoll:
         assert "Event extraction failed" in out
         assert "url_fetch_error" in out
 
-    @patch("herds_cli.commands.cmd_extractions.time.monotonic")
-    @patch("herds_cli.commands.cmd_extractions.time.sleep")
+    @patch("herds_cli.commands.cmd_sources.time.monotonic")
+    @patch("herds_cli.commands.cmd_sources.time.sleep")
     def test_poll_timeout_exits(
         self, mock_sleep, mock_monotonic, cli_runner, cli_obj
     ):
@@ -257,7 +257,7 @@ class TestUrlSubmitPoll:
         mock_monotonic.side_effect = [0.0, 9999.0]
         cli_obj["api_client"].session.request.side_effect = [
             _make_response(200, SUBMIT_RESPONSE),
-            _make_response(200, _extraction_response(status="processing")),
+            _make_response(200, _source_response(status="processing")),
         ]
 
         result = cli_runner.invoke(
@@ -269,7 +269,7 @@ class TestUrlSubmitPoll:
         assert result.exit_code == 1
         assert "Polling timed out" in strip_ansi(result.output)
 
-    @patch("herds_cli.commands.cmd_extractions.time.sleep")
+    @patch("herds_cli.commands.cmd_sources.time.sleep")
     def test_poll_zero_events_warning(
         self, mock_sleep, cli_runner, cli_obj
     ):
@@ -278,7 +278,7 @@ class TestUrlSubmitPoll:
         cli_obj["format"] = "text"
         cli_obj["api_client"].session.request.side_effect = [
             _make_response(200, SUBMIT_RESPONSE),
-            _make_response(200, _extraction_response(status="completed")),
+            _make_response(200, _source_response(status="completed")),
             _make_response(200, []),
         ]
 
@@ -307,7 +307,7 @@ class TestUrlSubmitPoll:
             result.output
         )
 
-    @patch("herds_cli.commands.cmd_extractions.time.sleep")
+    @patch("herds_cli.commands.cmd_sources.time.sleep")
     def test_poll_with_default_json_format_allowed(
         self, mock_sleep, cli_runner, cli_obj
     ):
@@ -315,7 +315,7 @@ class TestUrlSubmitPoll:
         cli_obj["format"] = "json"
         cli_obj["api_client"].session.request.side_effect = [
             _make_response(200, SUBMIT_RESPONSE),
-            _make_response(200, _extraction_response(status="completed")),
+            _make_response(200, _source_response(status="completed")),
             _make_response(200, [SAMPLE_EVENT]),
         ]
 

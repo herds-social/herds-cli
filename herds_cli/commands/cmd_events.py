@@ -415,7 +415,9 @@ def _build_event_update_data(
 
     Returns a dict containing only the fields the caller explicitly provided.
     The key names match the API's expected request body (see api.py:APIClient.update_event).
+    EventUpdateRequest has no outlook field, so that CLI flag is ignored.
     """
+    del outlook_calendar_event_id
     fields: dict[str, Any] = {
         "title": title,
         "description": description,
@@ -429,14 +431,13 @@ def _build_event_update_data(
         "city": city,
         "state": state,
         "organizer": organizer,
-        "email_contact": email_contact,
+        "email": email_contact,
         "phone": phone,
         "website": website,
         "category_level_1": category_level_1,
         "age_demographic": age_demographic,
         "apple_calendar_event_id": apple_calendar_event_id,
         "google_calendar_event_id": google_calendar_event_id,
-        "outlook_calendar_event_id": outlook_calendar_event_id,
     }
     return {k: v for k, v in fields.items() if v is not None}
 

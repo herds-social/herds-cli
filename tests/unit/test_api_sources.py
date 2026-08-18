@@ -1,12 +1,11 @@
 """
-Unit tests for URL submission and extractions APIClient methods.
+Unit tests for URL submission and sources APIClient methods.
 """
 
 from unittest.mock import MagicMock
 
 import pytest
 
-from herds_cli.api import APIClient
 from herds_cli.core.exceptions import SessionExpiredError
 
 
@@ -18,8 +17,8 @@ def _save_session(session_manager, email="test@example.com"):
     })
 
 
-def _ok_response(json_data):
-    resp = MagicMock(status_code=200)
+def _ok_response(json_data, status_code=200):
+    resp = MagicMock(status_code=status_code)
     resp.json.return_value = json_data
     return resp
 
@@ -68,65 +67,71 @@ class TestSubmitUrl:
         assert "add_to_calendar" not in body
 
 
-class TestGetExtraction:
+class TestGetSource:
     def test_gets_by_id(self, mock_api_client, mock_session_manager):
         _save_session(mock_session_manager)
         mock_api_client.session.request.return_value = _ok_response({
-            "extraction_id": "ext-1",
+            "source_id": "src-1",
             "extraction_status": "completed",
         })
 
-        result = mock_api_client.get_extraction("test@example.com", "ext-1")
+        result = mock_api_client.get_source("test@example.com", "src-1")
 
-        assert result["extraction_id"] == "ext-1"
+        assert result["source_id"] == "src-1"
         call = mock_api_client.session.request.call_args
-        assert call.args == ("GET", "http://localhost:8000/api/extractions/ext-1")
+        assert call.args == ("GET", "http://localhost:8000/api/sources/src-1")
 
 
-class TestGetExtractionEvents:
+class TestGetSourceEvents:
     def test_passes_timezone_param(self, mock_api_client, mock_session_manager):
         _save_session(mock_session_manager)
         mock_api_client.session.request.return_value = _ok_response([])
 
-        mock_api_client.get_extraction_events(
-            "test@example.com", "ext-1", timezone="America/New_York"
+        mock_api_client.get_source_events(
+            "test@example.com", "src-1", timezone="America/New_York"
         )
 
         call = mock_api_client.session.request.call_args
+        assert call.args == (
+            "GET",
+            "http://localhost:8000/api/sources/src-1/events",
+        )
         assert call.kwargs["params"] == {"timezone": "America/New_York"}
 
 
-class TestListExtractions:
+class TestListSources:
     def test_omits_none_filters(self, mock_api_client, mock_session_manager):
         _save_session(mock_session_manager)
         mock_api_client.session.request.return_value = _ok_response({
-            "extractions": [],
+            "sources": [],
             "total_count": 0,
             "has_more": False,
             "next_offset": None,
         })
 
-        mock_api_client.list_extractions("test@example.com")
+        mock_api_client.list_sources("test@example.com")
 
         params = mock_api_client.session.request.call_args.kwargs["params"]
         assert params == {"limit": 50, "offset": 0}
-        assert "status" not in params
+        assert "extraction_status" not in params
         assert "source_type" not in params
         assert "acknowledged" not in params
+        call = mock_api_client.session.request.call_args
+        assert call.args == ("GET", "http://localhost:8000/api/sources")
 
     def test_forwards_filters(self, mock_api_client, mock_session_manager):
         _save_session(mock_session_manager)
         mock_api_client.session.request.return_value = _ok_response({
-            "extractions": [],
+            "sources": [],
             "total_count": 0,
             "has_more": False,
             "next_offset": None,
         })
 
-        mock_api_client.list_extractions(
+        mock_api_client.list_sources(
             "test@example.com",
-            status="completed",
-            source_type="url",
+            extraction_status="completed",
+            source_type="bookmark",
             acknowledged=False,
             limit=10,
             offset=5,
@@ -136,26 +141,29 @@ class TestListExtractions:
         assert params == {
             "limit": 10,
             "offset": 5,
-            "status": "completed",
-            "source_type": "url",
+            "extraction_status": "completed",
+            "source_type": "bookmark",
             "acknowledged": False,
         }
 
 
-class TestAcknowledgeExtractions:
+class TestAcknowledgeSources:
     def test_ids_only_body(self, mock_api_client, mock_session_manager):
         _save_session(mock_session_manager)
         mock_api_client.session.request.return_value = _ok_response({
             "acknowledged_count": 2,
         })
 
-        mock_api_client.acknowledge_extractions(
-            "test@example.com", extraction_ids=["a", "b"]
+        mock_api_client.acknowledge_sources(
+            "test@example.com", source_ids=["a", "b"]
         )
 
-        assert mock_api_client.session.request.call_args.kwargs["json"] == {
-            "extraction_ids": ["a", "b"],
-        }
+        call = mock_api_client.session.request.call_args
+        assert call.args == (
+            "POST",
+            "http://localhost:8000/api/sources/acknowledge",
+        )
+        assert call.kwargs["json"] == {"source_ids": ["a", "b"]}
 
     def test_empty_body_for_ack_all(self, mock_api_client, mock_session_manager):
         _save_session(mock_session_manager)
@@ -163,7 +171,7 @@ class TestAcknowledgeExtractions:
             "acknowledged_count": 5,
         })
 
-        mock_api_client.acknowledge_extractions("test@example.com")
+        mock_api_client.acknowledge_sources("test@example.com")
 
         assert mock_api_client.session.request.call_args.kwargs["json"] == {}
 
@@ -173,20 +181,43 @@ class TestAcknowledgeExtractions:
             "acknowledged_count": 1,
         })
 
-        mock_api_client.acknowledge_extractions(
+        mock_api_client.acknowledge_sources(
             "test@example.com",
             before="2026-07-07T15:00:00Z",
-            extraction_ids=["x"],
+            source_ids=["x"],
         )
 
         assert mock_api_client.session.request.call_args.kwargs["json"] == {
             "before": "2026-07-07T15:00:00Z",
-            "extraction_ids": ["x"],
+            "source_ids": ["x"],
         }
 
     def test_no_session_raises(self, mock_api_client):
         with pytest.raises(Exception, match="No valid session"):
-            mock_api_client.acknowledge_extractions("nobody@example.com")
+            mock_api_client.acknowledge_sources("nobody@example.com")
+
+
+class TestReprocessSource:
+    def test_posts_and_returns_ack(self, mock_api_client, mock_session_manager):
+        _save_session(mock_session_manager)
+        mock_api_client.session.request.return_value = _ok_response(
+            {"source_id": "src-1", "extraction_status": "processing"},
+            status_code=202,
+        )
+
+        result = mock_api_client.reprocess_source("test@example.com", "src-1")
+
+        assert result["source_id"] == "src-1"
+        assert result["extraction_status"] == "processing"
+        call = mock_api_client.session.request.call_args
+        assert call.args == (
+            "POST",
+            "http://localhost:8000/api/sources/src-1/reprocess",
+        )
+
+    def test_no_session_raises(self, mock_api_client):
+        with pytest.raises(Exception, match="No valid session"):
+            mock_api_client.reprocess_source("nobody@example.com", "src-1")
 
 
 class TestCreateShare:
@@ -199,26 +230,26 @@ class TestCreateShare:
         }
         mock_api_client.session.request.return_value = resp
 
-        result = mock_api_client.create_share("test@example.com", "ext-1")
+        result = mock_api_client.create_share("test@example.com", "src-1")
 
         assert result["share_token"] == "3fk9tok"
         assert result["share_url"] == "https://app.herds.events/s/3fk9tok"
         call = mock_api_client.session.request.call_args
         assert call.args == (
             "POST",
-            "http://localhost:8000/api/extractions/ext-1/share",
+            "http://localhost:8000/api/sources/src-1/share",
         )
 
     def test_404_raises_friendly_message(self, mock_api_client, mock_session_manager):
         _save_session(mock_session_manager)
         resp = MagicMock(status_code=404)
-        resp.json.return_value = {"detail": "Extraction not found"}
+        resp.json.return_value = {"detail": "Source not found"}
         mock_api_client.session.request.return_value = resp
 
         with pytest.raises(
-            Exception, match=r"Extraction not found \(or not yours\): ext-1"
+            Exception, match=r"Source not found \(or not yours\): src-1"
         ):
-            mock_api_client.create_share("test@example.com", "ext-1")
+            mock_api_client.create_share("test@example.com", "src-1")
 
     def test_400_raises_malformed_id_message(
         self, mock_api_client, mock_session_manager
@@ -228,26 +259,23 @@ class TestCreateShare:
         resp.json.return_value = {"detail": "bad id"}
         mock_api_client.session.request.return_value = resp
 
-        with pytest.raises(Exception, match=r"Malformed extraction id: not-an-id"):
+        with pytest.raises(Exception, match=r"Malformed source id: not-an-id"):
             mock_api_client.create_share("test@example.com", "not-an-id")
 
     def test_no_session_raises(self, mock_api_client):
         with pytest.raises(Exception, match="No valid session"):
-            mock_api_client.create_share("nobody@example.com", "ext-1")
+            mock_api_client.create_share("nobody@example.com", "src-1")
 
     def test_401_raises_session_expired_with_login_hint(
         self, mock_api_client, mock_session_manager
     ):
-        # The saved session has no refresh_token, so the 401 auto-refresh
-        # fails and _make_request raises SessionExpiredError before
-        # _handle_share_error ever sees the response.
         _save_session(mock_session_manager)
         resp = MagicMock(status_code=401)
         resp.json.return_value = {"detail": "unauthorized"}
         mock_api_client.session.request.return_value = resp
 
         with pytest.raises(SessionExpiredError, match="Please log in again"):
-            mock_api_client.create_share("test@example.com", "ext-1")
+            mock_api_client.create_share("test@example.com", "src-1")
 
 
 class TestRevokeShare:
@@ -257,15 +285,24 @@ class TestRevokeShare:
         _save_session(mock_session_manager)
         mock_api_client.session.request.return_value = MagicMock(status_code=204)
 
-        result = mock_api_client.revoke_share("test@example.com", "ext-1")
+        result = mock_api_client.revoke_share("test@example.com", "src-1")
 
-        assert result == {"extraction_id": "ext-1", "revoked": True}
+        assert result == {"source_id": "src-1", "revoked": True}
         call = mock_api_client.session.request.call_args
         assert call.args == (
             "DELETE",
-            "http://localhost:8000/api/extractions/ext-1/share",
+            "http://localhost:8000/api/sources/src-1/share",
         )
+
+    def test_422_raises_not_eligible(self, mock_api_client, mock_session_manager):
+        _save_session(mock_session_manager)
+        resp = MagicMock(status_code=422)
+        resp.json.return_value = {"detail": "Source src-1 is not eligible"}
+        mock_api_client.session.request.return_value = resp
+
+        with pytest.raises(Exception, match=r"Source src-1 is not eligible"):
+            mock_api_client.revoke_share("test@example.com", "src-1")
 
     def test_no_session_raises(self, mock_api_client):
         with pytest.raises(Exception, match="No valid session"):
-            mock_api_client.revoke_share("nobody@example.com", "ext-1")
+            mock_api_client.revoke_share("nobody@example.com", "src-1")
