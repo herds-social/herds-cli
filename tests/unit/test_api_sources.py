@@ -219,6 +219,20 @@ class TestReprocessSource:
         with pytest.raises(Exception, match="No valid session"):
             mock_api_client.reprocess_source("nobody@example.com", "src-1")
 
+    def test_409_says_not_failed_not_user_exists(
+        self, mock_api_client, mock_session_manager
+    ):
+        _save_session(mock_session_manager)
+        resp = MagicMock(status_code=409)
+        resp.json.return_value = {"detail": "Source src-1 is not failed"}
+        mock_api_client.session.request.return_value = resp
+
+        with pytest.raises(Exception, match=r"Source src-1 is not failed"):
+            mock_api_client.reprocess_source("test@example.com", "src-1")
+        with pytest.raises(Exception) as exc_info:
+            mock_api_client.reprocess_source("test@example.com", "src-1")
+        assert "User already exists" not in str(exc_info.value)
+
 
 class TestCreateShare:
     def test_posts_and_returns_share(self, mock_api_client, mock_session_manager):

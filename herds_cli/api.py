@@ -1049,8 +1049,11 @@ class APIClient:
 
         if response.status_code == 202:
             return response.json()
-        else:
-            self.handle_api_error(response)
+        if response.status_code == 409:
+            raise Exception(f"Source {source_id} is not failed")
+        if response.status_code == 422:
+            raise Exception(f"Source {source_id} is not eligible")
+        self.handle_api_error(response)
 
     def _handle_share_error(
         self, response: requests.Response, source_id: str
