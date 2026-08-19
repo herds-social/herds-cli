@@ -15,8 +15,10 @@ from herds_cli.output import OutputFormatter
 from herds_cli.core.base import (
     APIResponseHandler,
     EventCommandBase,
+    _tombstone_fields,
     display_events_summary,
 )
+from herds_cli.core.exceptions import HerdsError
 from herds_cli.types import EventV2
 
 
@@ -373,6 +375,17 @@ def update_event(
         outlook_calendar_event_id=outlook_calendar_event_id,
     )
 
+    if not data:
+        OutputFormatter.print_error(
+            "Outlook calendar IDs are not accepted on events update. "
+            "Use herds event-user-data."
+        )
+        raise HerdsError("outlook calendar id is not an event-update field")
+    if outlook_calendar_event_id is not None:
+        OutputFormatter.print_warning(
+            "Ignoring --outlook-calendar-event-id. Use herds event-user-data."
+        )
+
     # Build URL and execute API request with proper error handling
     url = f"{cmd.api_client.base_url}/api/events/{event_id}"
     result = cmd.execute_api_request(
@@ -456,6 +469,14 @@ def _display_concise_summary(events: list[EventV2]) -> None:
         return
 
     for i, event in enumerate(events, 1):
+        if event.get("item_type") == "deleted_event":
+            title, event_id, deleted_at = _tombstone_fields(event)
+            line = f"  {i}. {escape(title)}  |  deleted {escape(deleted_at)}"
+            if event_id:
+                line += f"  (id {escape(event_id)})"
+            OutputFormatter.print_info(line)
+            continue
+
         parent_title = event.get("parent_title")
         title = event.get("title", "Untitled")
 

@@ -4,7 +4,7 @@ Guide for manually exercising `herds url` and `herds sources`.
 
 ## Prerequisites
 
-### Use a 4.2.0+ build
+### Use a 5.0.0+ build
 
 The global `herds` install may still be 4.x and will not have `url` / `sources`:
 
@@ -122,7 +122,7 @@ uv run herds url submit \
 
 | Symptom                                               | Cause                                                                          |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `No such command 'url'`                               | Old CLI install; use `uv run herds` from 4.2.0+ worktree                       |
+| `No such command 'url'`                               | Old CLI install; use `uv run herds` from 5.0.0+ worktree                       |
 | `URL ingestion is disabled`                           | Server `URL_FETCH_ENABLED=false`; use local server or wait for prod enablement |
 | `URL blocked: ...`                                    | SSRF guard rejected the URL (400)                                              |
 | `Rate limited` / usage message                        | Tier limit (429)                                                               |
@@ -145,22 +145,22 @@ uv run herds sources list --limit 10 --offset 0
 ```
 
 Unacknowledged terminal rows show a trailing `[unread]` marker in text mode.
-List rows include the full 24-character extraction ID in brackets (copy it for
+List rows include the full 24-character source ID in brackets (copy it for
 `get`, `events`, and `ack`).
 
 ### Get status
 
 ```bash
-uv run herds sources get <EXTRACTION_ID>
+uv run herds sources get <SOURCE_ID>
 ```
 
 ### Fetch events
 
 ```bash
-uv run herds sources events <EXTRACTION_ID>
+uv run herds sources events <SOURCE_ID>
 
 # JSON array on stdout
-uv run herds sources events <EXTRACTION_ID> --format json
+uv run herds sources events <SOURCE_ID> --format json
 ```
 
 ### Acknowledge
