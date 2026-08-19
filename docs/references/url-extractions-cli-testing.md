@@ -1,12 +1,12 @@
-# Testing URL submit and extractions from the CLI
+# Testing URL submit and sources from the CLI
 
-Guide for manually exercising `herds url` and `herds extractions` (added in **4.2.0**).
+Guide for manually exercising `herds url` and `herds sources`.
 
 ## Prerequisites
 
-### Use a 4.2.0+ build
+### Use a 5.0.0+ build
 
-The global `herds` install may still be 4.1.x and will not have `url` / `extractions`:
+The global `herds` install may still be 4.x and will not have `url` / `sources`:
 
 ```bash
 herds --help | grep url          # empty → old install
@@ -16,7 +16,7 @@ From the repo worktree:
 
 ```bash
 cd /path/to/herds-cli
-uv run herds --help | grep url   # should list url + extractions
+uv run herds --help | grep -E 'url|sources'   # should list url + sources
 ```
 
 Or install the branch locally:
@@ -77,7 +77,7 @@ Expect stderr:
 - `URL submitted for processing`
 - `Event source ID: <id>`
 
-Save the ID for extractions commands below.
+Save the ID for sources commands below.
 
 ### Submit with poll (wait + display events)
 
@@ -85,7 +85,7 @@ Save the ID for extractions commands below.
 uv run herds url submit "https://example.com/events" --poll
 ```
 
-Polls `GET /api/extractions/{id}` every 2s (180s timeout), then fetches events
+Polls `GET /api/sources/{id}` every 2s (180s timeout), then fetches events
 and renders them like `herds image upload --poll`.
 
 ### Other flags
@@ -122,7 +122,7 @@ uv run herds url submit \
 
 | Symptom                                               | Cause                                                                          |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `No such command 'url'`                               | Old CLI install; use `uv run herds` from 4.2.0+ worktree                       |
+| `No such command 'url'`                               | Old CLI install; use `uv run herds` from 5.0.0+ worktree                       |
 | `URL ingestion is disabled`                           | Server `URL_FETCH_ENABLED=false`; use local server or wait for prod enablement |
 | `URL blocked: ...`                                    | SSRF guard rejected the URL (400)                                              |
 | `Rate limited` / usage message                        | Tier limit (429)                                                               |
@@ -130,46 +130,46 @@ uv run herds url submit \
 
 ---
 
-## `herds extractions`
+## `herds sources`
 
 Use the `event_source_id` from submit, or an `image_id` from a prior image upload.
 
 ### List history
 
 ```bash
-uv run herds extractions list
+uv run herds sources list
 
-uv run herds extractions list --status completed --source-type url
-uv run herds extractions list --unacked
-uv run herds extractions list --limit 10 --offset 0
+uv run herds sources list --status completed --source-type url
+uv run herds sources list --unacked
+uv run herds sources list --limit 10 --offset 0
 ```
 
 Unacknowledged terminal rows show a trailing `[unread]` marker in text mode.
-List rows include the full 24-character extraction ID in brackets (copy it for
+List rows include the full 24-character source ID in brackets (copy it for
 `get`, `events`, and `ack`).
 
 ### Get status
 
 ```bash
-uv run herds extractions get <EXTRACTION_ID>
+uv run herds sources get <SOURCE_ID>
 ```
 
 ### Fetch events
 
 ```bash
-uv run herds extractions events <EXTRACTION_ID>
+uv run herds sources events <SOURCE_ID>
 
 # JSON array on stdout
-uv run herds extractions events <EXTRACTION_ID> --format json
+uv run herds sources events <SOURCE_ID> --format json
 ```
 
 ### Acknowledge
 
 ```bash
-uv run herds extractions ack <ID1> <ID2>
-uv run herds extractions ack --all
-uv run herds extractions ack --before 2026-07-07
-uv run herds extractions ack --before 2026-07-07T15:00:00Z
+uv run herds sources ack <ID1> <ID2>
+uv run herds sources ack --all
+uv run herds sources ack --before 2026-07-07
+uv run herds sources ack --before 2026-07-07T15:00:00Z
 ```
 
 ---
@@ -186,15 +186,15 @@ herds config set api_url --local
 uv run herds url submit "https://example.com/events" --poll
 
 # 3. Inspect history
-uv run herds extractions list --source-type url
+uv run herds sources list --source-type url
 ```
 
 Capture ID from submit output, then:
 
 ```bash
 ID=<event_source_id>
-uv run herds extractions get "$ID"
-uv run herds extractions events "$ID"
+uv run herds sources get "$ID"
+uv run herds sources events "$ID"
 ```
 
 ---
@@ -203,7 +203,7 @@ uv run herds extractions events "$ID"
 
 ```bash
 uv run pytest tests/cli/test_cli_url.py
-uv run pytest tests/cli/test_cli_extractions.py
-uv run pytest tests/unit/test_api_extractions.py
+uv run pytest tests/cli/test_cli_sources.py
+uv run pytest tests/unit/test_api_sources.py
 uv run pytest
 ```

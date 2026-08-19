@@ -1,5 +1,5 @@
 """
-CLI tests for `herds extractions` commands.
+CLI tests for `herds sources` commands.
 """
 
 import json
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from herds_cli.cli import cli
-from herds_cli.commands.cmd_extractions import parse_before_timestamp
+from herds_cli.commands.cmd_sources import parse_before_timestamp
 from tests.cli.conftest import strip_ansi
 
 
@@ -30,11 +30,13 @@ def _make_response(status_code=200, json_data=None):
     return mock
 
 
-URL_EXTRACTION = {
-    "extraction_id": "68a3f1c2deadbeefdeadbeef",
+URL_SOURCE = {
+    "source_id": "68a3f1c2deadbeefdeadbeef",
     "source_type": "url",
     "extraction_status": "completed",
     "event_count": 3,
+    "can_reprocess": False,
+    "share_url": None,
     "url": {
         "submitted_url": "https://venue.com/calendar/[red]",
         "candidate_link_count": 2,
@@ -44,13 +46,26 @@ URL_EXTRACTION = {
     "acknowledged_at": None,
 }
 
-IMAGE_EXTRACTION = {
-    "extraction_id": "68a3e011deadbeefdeadbeef",
+IMAGE_SOURCE = {
+    "source_id": "68a3e011deadbeefdeadbeef",
     "source_type": "image",
     "extraction_status": "processing",
     "event_count": 0,
+    "can_reprocess": False,
     "image": {"image_name": "flyer.jpg", "image_media_type": "image/jpeg"},
     "created_at": "2026-07-07T09:02:00Z",
+    "acknowledged_at": None,
+}
+
+BOOKMARK_SOURCE = {
+    "source_id": "68a3b00cdeadbeefdeadbeef",
+    "source_type": "bookmark",
+    "extraction_status": "completed",
+    "event_count": 2,
+    "can_reprocess": False,
+    "bookmark_source_id": "68a3f1c2deadbeefdeadbeef",
+    "share_url": None,
+    "created_at": "2026-08-16T12:00:00Z",
     "acknowledged_at": None,
 }
 
@@ -68,46 +83,57 @@ SHARE_RESPONSE = {
 }
 
 
-class TestExtractionsList:
-    def test_renders_url_and_image_rows(self, cli_runner, cli_obj):
+class TestExtractionsCommandGone:
+    def test_extractions_is_unknown(self, cli_runner, cli_obj):
+        result = cli_runner.invoke(cli, ["extractions", "list"], obj=cli_obj)
+
+        assert result.exit_code != 0
+        assert "No such command" in result.output
+        assert "extractions" in result.output
+
+
+class TestSourcesList:
+    def test_renders_url_image_and_bookmark_rows(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["config"].output_format = "text"
         cli_obj["format"] = "text"
         cli_obj["api_client"].session.request.return_value = _make_response(
             200,
             {
-                "extractions": [URL_EXTRACTION, IMAGE_EXTRACTION],
-                "total_count": 2,
+                "sources": [URL_SOURCE, IMAGE_SOURCE, BOOKMARK_SOURCE],
+                "total_count": 3,
                 "has_more": False,
                 "next_offset": None,
             },
         )
 
-        result = cli_runner.invoke(cli, ["extractions", "list"], obj=cli_obj)
+        result = cli_runner.invoke(cli, ["sources", "list"], obj=cli_obj)
 
         assert result.exit_code == 0
         out = strip_ansi(result.output)
-        assert URL_EXTRACTION["extraction_id"] in out
+        assert URL_SOURCE["source_id"] in out
         assert "https://venue.com/calendar/[red]" in out
         assert "flyer.jpg" in out
+        assert BOOKMARK_SOURCE["bookmark_source_id"] in out
+        assert "bookmark" in out
         assert "[unread]" in out
 
     def test_forwards_filters(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["api_client"].session.request.return_value = _make_response(
             200,
-            {"extractions": [], "total_count": 0, "has_more": False, "next_offset": None},
+            {"sources": [], "total_count": 0, "has_more": False, "next_offset": None},
         )
 
         cli_runner.invoke(
             cli,
             [
-                "extractions",
+                "sources",
                 "list",
                 "--status",
                 "completed",
                 "--source-type",
-                "url",
+                "bookmark",
                 "--unacked",
                 "--limit",
                 "10",
@@ -118,8 +144,8 @@ class TestExtractionsList:
         )
 
         params = cli_obj["api_client"].session.request.call_args.kwargs["params"]
-        assert params["status"] == "completed"
-        assert params["source_type"] == "url"
+        assert params["extraction_status"] == "completed"
+        assert params["source_type"] == "bookmark"
         assert params["acknowledged"] is False
         assert params["limit"] == 10
         assert params["offset"] == 5
@@ -128,10 +154,10 @@ class TestExtractionsList:
         _create_session(cli_obj["session_manager"])
         cli_obj["api_client"].session.request.return_value = _make_response(
             200,
-            {"extractions": [], "total_count": 0, "has_more": False, "next_offset": None},
+            {"sources": [], "total_count": 0, "has_more": False, "next_offset": None},
         )
 
-        cli_runner.invoke(cli, ["extractions", "list", "--acked"], obj=cli_obj)
+        cli_runner.invoke(cli, ["sources", "list", "--acked"], obj=cli_obj)
 
         params = cli_obj["api_client"].session.request.call_args.kwargs["params"]
         assert params["acknowledged"] is True
@@ -142,13 +168,13 @@ class TestExtractionsList:
         cli_obj["format"] = "text"
         cli_obj["api_client"].session.request.return_value = _make_response(
             200,
-            {"extractions": [], "total_count": 0, "has_more": False, "next_offset": None},
+            {"sources": [], "total_count": 0, "has_more": False, "next_offset": None},
         )
 
-        result = cli_runner.invoke(cli, ["extractions", "list"], obj=cli_obj)
+        result = cli_runner.invoke(cli, ["sources", "list"], obj=cli_obj)
 
         assert result.exit_code == 0
-        assert "No extractions found" in strip_ansi(result.output)
+        assert "No sources found" in strip_ansi(result.output)
 
     def test_api_error_exits(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
@@ -156,57 +182,73 @@ class TestExtractionsList:
             404, {"detail": "Not found"}
         )
 
-        result = cli_runner.invoke(cli, ["extractions", "list"], obj=cli_obj)
+        result = cli_runner.invoke(cli, ["sources", "list"], obj=cli_obj)
 
         assert result.exit_code == 1
 
 
-class TestExtractionsGet:
-    def test_summary_for_url_extraction(self, cli_runner, cli_obj):
+class TestSourcesGet:
+    def test_summary_for_url_source(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["format"] = "text"
         cli_obj["api_client"].session.request.return_value = _make_response(
-            200, URL_EXTRACTION
+            200, URL_SOURCE
         )
 
         result = cli_runner.invoke(
-            cli, ["extractions", "get", URL_EXTRACTION["extraction_id"]], obj=cli_obj
+            cli, ["sources", "get", URL_SOURCE["source_id"]], obj=cli_obj
         )
 
         assert result.exit_code == 0
         out = strip_ansi(result.output)
         assert "Source type: url" in out
         assert "https://venue.com/calendar" in out
+        assert "Can reprocess: no" in out
+
+    def test_prints_share_url_when_live(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["format"] = "text"
+        live = dict(URL_SOURCE)
+        live["share_url"] = "https://app.herds.events/s/3fk9tok"
+        cli_obj["api_client"].session.request.return_value = _make_response(200, live)
+
+        result = cli_runner.invoke(
+            cli, ["sources", "get", live["source_id"]], obj=cli_obj
+        )
+
+        assert result.exit_code == 0
+        assert "https://app.herds.events/s/3fk9tok" in strip_ansi(result.output)
 
     def test_failed_shows_error_type(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["format"] = "text"
-        failed = dict(URL_EXTRACTION)
+        failed = dict(URL_SOURCE)
         failed["extraction_status"] = "failed"
-        failed["extraction_error_type"] = "processing_error"
+        failed["extraction_error_type"] = "timed_out"
+        failed["can_reprocess"] = True
         cli_obj["api_client"].session.request.return_value = _make_response(200, failed)
 
         result = cli_runner.invoke(
-            cli, ["extractions", "get", failed["extraction_id"]], obj=cli_obj
+            cli, ["sources", "get", failed["source_id"]], obj=cli_obj
         )
 
         assert result.exit_code == 0
-        assert "processing_error" in strip_ansi(result.output)
+        out = strip_ansi(result.output)
+        assert "timed_out" in out
+        assert "Can reprocess: yes" in out
 
     def test_404_exits(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["api_client"].session.request.return_value = _make_response(
-            404, {"detail": "Extraction x not found"}
+            404, {"detail": "Source x not found"}
         )
 
-        result = cli_runner.invoke(
-            cli, ["extractions", "get", "bad-id"], obj=cli_obj
-        )
+        result = cli_runner.invoke(cli, ["sources", "get", "bad-id"], obj=cli_obj)
 
         assert result.exit_code == 1
 
 
-class TestExtractionsEvents:
+class TestSourcesEvents:
     def test_renders_events(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["format"] = "text"
@@ -214,9 +256,7 @@ class TestExtractionsEvents:
             200, [SAMPLE_EVENT]
         )
 
-        result = cli_runner.invoke(
-            cli, ["extractions", "events", "ext-1"], obj=cli_obj
-        )
+        result = cli_runner.invoke(cli, ["sources", "events", "src-1"], obj=cli_obj)
 
         assert result.exit_code == 0
         assert "Block Party" in strip_ansi(result.output)
@@ -239,9 +279,7 @@ class TestExtractionsEvents:
             200, [event]
         )
 
-        result = cli_runner.invoke(
-            cli, ["extractions", "events", "ext-1"], obj=cli_obj
-        )
+        result = cli_runner.invoke(cli, ["sources", "events", "src-1"], obj=cli_obj)
 
         assert result.exit_code == 0
         out = strip_ansi(result.output)
@@ -254,9 +292,7 @@ class TestExtractionsEvents:
         cli_obj["format"] = "text"
         cli_obj["api_client"].session.request.return_value = _make_response(200, [])
 
-        result = cli_runner.invoke(
-            cli, ["extractions", "events", "ext-1"], obj=cli_obj
-        )
+        result = cli_runner.invoke(cli, ["sources", "events", "src-1"], obj=cli_obj)
 
         assert result.exit_code == 0
         assert "No events were extracted" in strip_ansi(result.output)
@@ -269,16 +305,14 @@ class TestExtractionsEvents:
             200, [SAMPLE_EVENT]
         )
 
-        result = cli_runner.invoke(
-            cli, ["extractions", "events", "ext-1"], obj=cli_obj
-        )
+        result = cli_runner.invoke(cli, ["sources", "events", "src-1"], obj=cli_obj)
 
         assert result.exit_code == 0
         payload = json.loads(result.stdout)
         assert payload[0]["title"] == "Block Party"
 
 
-class TestExtractionsAck:
+class TestSourcesAck:
     def test_ids_only_body(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["format"] = "text"
@@ -286,15 +320,13 @@ class TestExtractionsAck:
             200, {"acknowledged_count": 2}
         )
 
-        result = cli_runner.invoke(
-            cli, ["extractions", "ack", "id1", "id2"], obj=cli_obj
-        )
+        result = cli_runner.invoke(cli, ["sources", "ack", "id1", "id2"], obj=cli_obj)
 
         assert result.exit_code == 0
         body = cli_obj["api_client"].session.request.call_args.kwargs["json"]
-        assert body == {"extraction_ids": ["id1", "id2"]}
+        assert body == {"source_ids": ["id1", "id2"]}
         assert "before" not in body
-        assert "Acknowledged 2 extraction(s)" in strip_ansi(result.output)
+        assert "Acknowledged 2 source(s)" in strip_ansi(result.output)
 
     def test_all_empty_body(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
@@ -302,7 +334,7 @@ class TestExtractionsAck:
             200, {"acknowledged_count": 5}
         )
 
-        cli_runner.invoke(cli, ["extractions", "ack", "--all"], obj=cli_obj)
+        cli_runner.invoke(cli, ["sources", "ack", "--all"], obj=cli_obj)
 
         assert cli_obj["api_client"].session.request.call_args.kwargs["json"] == {}
 
@@ -314,18 +346,18 @@ class TestExtractionsAck:
 
         cli_runner.invoke(
             cli,
-            ["extractions", "ack", "id1", "--before", "2026-07-07T15:00:00Z"],
+            ["sources", "ack", "id1", "--before", "2026-07-07T15:00:00Z"],
             obj=cli_obj,
         )
 
         body = cli_obj["api_client"].session.request.call_args.kwargs["json"]
-        assert body["extraction_ids"] == ["id1"]
+        assert body["source_ids"] == ["id1"]
         assert body["before"] == "2026-07-07T15:00:00Z"
 
     def test_usage_error_no_args(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
 
-        result = cli_runner.invoke(cli, ["extractions", "ack"], obj=cli_obj)
+        result = cli_runner.invoke(cli, ["sources", "ack"], obj=cli_obj)
 
         assert result.exit_code != 0
 
@@ -333,7 +365,7 @@ class TestExtractionsAck:
         _create_session(cli_obj["session_manager"])
 
         result = cli_runner.invoke(
-            cli, ["extractions", "ack", "--all", "id1"], obj=cli_obj
+            cli, ["sources", "ack", "--all", "id1"], obj=cli_obj
         )
 
         assert result.exit_code != 0
@@ -341,7 +373,6 @@ class TestExtractionsAck:
 
 class TestParseBeforeTimestamp:
     def test_plain_date_midnight_local_to_utc(self):
-        # America/New_York is UTC-4 in July
         result = parse_before_timestamp("2026-07-07", "America/New_York")
         assert result == "2026-07-07T04:00:00Z"
 
@@ -358,7 +389,26 @@ class TestParseBeforeTimestamp:
             parse_before_timestamp("not-a-date", "UTC")
 
 
-class TestExtractionsShare:
+class TestSourcesReprocess:
+    def test_posts_and_confirms(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["format"] = "text"
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            202, {"source_id": "src-1", "extraction_status": "processing"}
+        )
+
+        result = cli_runner.invoke(cli, ["sources", "reprocess", "src-1"], obj=cli_obj)
+
+        assert result.exit_code == 0
+        call = cli_obj["api_client"].session.request.call_args
+        assert call.args == (
+            "POST",
+            "http://localhost:8000/api/sources/src-1/reprocess",
+        )
+        assert "Reprocessing source src-1" in strip_ansi(result.output)
+
+
+class TestSourcesShare:
     def test_text_mode_prints_bare_url_on_stdout(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["config"].output_format = "text"
@@ -367,7 +417,7 @@ class TestExtractionsShare:
             201, SHARE_RESPONSE
         )
 
-        result = cli_runner.invoke(cli, ["extractions", "share", "ext-1"], obj=cli_obj)
+        result = cli_runner.invoke(cli, ["sources", "share", "src-1"], obj=cli_obj)
 
         assert result.exit_code == 0
         assert strip_ansi(result.stdout) == "https://app.herds.events/s/3fk9tok\n"
@@ -377,7 +427,7 @@ class TestExtractionsShare:
         call = cli_obj["api_client"].session.request.call_args
         assert call.args == (
             "POST",
-            "http://localhost:8000/api/extractions/ext-1/share",
+            "http://localhost:8000/api/sources/src-1/share",
         )
 
     def test_json_mode_emits_server_response_verbatim(self, cli_runner, cli_obj):
@@ -386,7 +436,7 @@ class TestExtractionsShare:
             201, SHARE_RESPONSE
         )
 
-        result = cli_runner.invoke(cli, ["extractions", "share", "ext-1"], obj=cli_obj)
+        result = cli_runner.invoke(cli, ["sources", "share", "src-1"], obj=cli_obj)
 
         assert result.exit_code == 0
         assert json.loads(result.stdout) == SHARE_RESPONSE
@@ -394,14 +444,12 @@ class TestExtractionsShare:
 
     def test_piped_default_auto_resolves_to_text(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
-        # A piped default "auto" resolves to json in cli(); share overrides
-        # that (via _raw_format) so `share <id> | pbcopy` gets the bare URL.
         cli_obj["_raw_format"] = "auto"
         cli_obj["api_client"].session.request.return_value = _make_response(
             201, SHARE_RESPONSE
         )
 
-        result = cli_runner.invoke(cli, ["extractions", "share", "ext-1"], obj=cli_obj)
+        result = cli_runner.invoke(cli, ["sources", "share", "src-1"], obj=cli_obj)
 
         assert result.exit_code == 0
         assert strip_ansi(result.stdout) == "https://app.herds.events/s/3fk9tok\n"
@@ -417,9 +465,9 @@ class TestExtractionsShare:
         result = cli_runner.invoke(
             cli,
             [
-                "extractions",
+                "sources",
                 "share",
-                "ext-1",
+                "src-1",
                 "--web-url",
                 "http://localhost:5173/",
             ],
@@ -441,9 +489,9 @@ class TestExtractionsShare:
         result = cli_runner.invoke(
             cli,
             [
-                "extractions",
+                "sources",
                 "share",
-                "ext-1",
+                "src-1",
                 "--web-url",
                 "http://localhost:5173",
             ],
@@ -458,27 +506,23 @@ class TestExtractionsShare:
     def test_404_exits_nonzero_with_friendly_message(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["api_client"].session.request.return_value = _make_response(
-            404, {"detail": "Extraction not found"}
+            404, {"detail": "Source not found"}
         )
 
-        result = cli_runner.invoke(cli, ["extractions", "share", "ext-1"], obj=cli_obj)
+        result = cli_runner.invoke(cli, ["sources", "share", "src-1"], obj=cli_obj)
 
         assert result.exit_code != 0
-        assert "Extraction not found (or not yours): ext-1" in strip_ansi(
-            result.stderr
-        )
+        assert "Source not found (or not yours): src-1" in strip_ansi(result.stderr)
 
 
-class TestExtractionsUnshare:
+class TestSourcesUnshare:
     def test_text_mode_confirms_and_keeps_stdout_empty(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["config"].output_format = "text"
         cli_obj["format"] = "text"
         cli_obj["api_client"].session.request.return_value = _make_response(204)
 
-        result = cli_runner.invoke(
-            cli, ["extractions", "unshare", "ext-1"], obj=cli_obj
-        )
+        result = cli_runner.invoke(cli, ["sources", "unshare", "src-1"], obj=cli_obj)
 
         assert result.exit_code == 0
         assert strip_ansi(result.stdout) == ""
@@ -486,34 +530,39 @@ class TestExtractionsUnshare:
         call = cli_obj["api_client"].session.request.call_args
         assert call.args == (
             "DELETE",
-            "http://localhost:8000/api/extractions/ext-1/share",
+            "http://localhost:8000/api/sources/src-1/share",
         )
 
     def test_json_mode_emits_revoked_payload(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["api_client"].session.request.return_value = _make_response(204)
 
-        result = cli_runner.invoke(
-            cli, ["extractions", "unshare", "ext-1"], obj=cli_obj
-        )
+        result = cli_runner.invoke(cli, ["sources", "unshare", "src-1"], obj=cli_obj)
 
         assert result.exit_code == 0
         assert json.loads(result.stdout) == {
-            "extraction_id": "ext-1",
+            "source_id": "src-1",
             "revoked": True,
         }
+
+    def test_422_bookmark_is_not_eligible(self, cli_runner, cli_obj):
+        _create_session(cli_obj["session_manager"])
+        cli_obj["api_client"].session.request.return_value = _make_response(
+            422, {"detail": "Source src-1 is not eligible"}
+        )
+
+        result = cli_runner.invoke(cli, ["sources", "unshare", "src-1"], obj=cli_obj)
+
+        assert result.exit_code != 0
+        assert "not eligible" in strip_ansi(result.stderr)
 
     def test_404_exits_nonzero_with_friendly_message(self, cli_runner, cli_obj):
         _create_session(cli_obj["session_manager"])
         cli_obj["api_client"].session.request.return_value = _make_response(
-            404, {"detail": "Extraction not found"}
+            404, {"detail": "Source not found"}
         )
 
-        result = cli_runner.invoke(
-            cli, ["extractions", "unshare", "ext-1"], obj=cli_obj
-        )
+        result = cli_runner.invoke(cli, ["sources", "unshare", "src-1"], obj=cli_obj)
 
         assert result.exit_code != 0
-        assert "Extraction not found (or not yours): ext-1" in strip_ansi(
-            result.stderr
-        )
+        assert "Source not found (or not yours): src-1" in strip_ansi(result.stderr)

@@ -157,6 +157,26 @@ class TestEventsList:
         assert "Summer Concert" in out
         assert "Parent: Christmas Eve at Weddington" in out
 
+    def test_list_events_summary_labels_tombstones(self, cli_runner, cli_obj, mock_session_manager):
+        _create_session(mock_session_manager)
+        tombstone = {
+            "item_type": "deleted_event",
+            "id": "evt-gone",
+            "title": "Old Picnic",
+            "deleted_at": "2026-08-01T12:00:00Z",
+        }
+        _mock_json_response(cli_obj["api_client"], [tombstone])
+
+        result = cli_runner.invoke(
+            cli, ["events", "list", "--summary"], obj=cli_obj
+        )
+
+        assert result.exit_code == 0
+        out = strip_ansi(result.output)
+        assert "Old Picnic" in out
+        assert "deleted" in out
+        assert "Unknown date" not in out
+
     def test_get_event_shows_parent_title(self, cli_runner, cli_obj, mock_session_manager):
         """`events get` prints a 'Parent:' row above 'Title:' when parent_title is set."""
         _create_session(mock_session_manager)
@@ -231,3 +251,28 @@ class TestEventsDelete:
 
         assert result.exit_code != 0
         assert "No active sessions" in strip_ansi(result.output)
+
+
+class TestEventsUpdate:
+    def test_outlook_only_update_is_rejected(
+        self, cli_runner, cli_obj, mock_session_manager
+    ):
+        _create_session(mock_session_manager)
+
+        result = cli_runner.invoke(
+            cli,
+            [
+                "events",
+                "update",
+                "evt-001",
+                "--outlook-calendar-event-id",
+                "o-1",
+            ],
+            obj=cli_obj,
+        )
+
+        assert result.exit_code != 0
+        out = strip_ansi(result.output)
+        assert "Outlook" in out
+        assert "event-user-data" in out
+        assert cli_obj["api_client"].session.request.call_count == 0

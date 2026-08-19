@@ -33,16 +33,18 @@ HEALTHY_PAYLOAD = {
     "message": "Ping!",
     "env": "production",
     "supabase_ref": "abcxyz",
-    "mongo_db": "herds",
     "git_sha": "87f1870",
+    "pr_number": 366,
+    "deployed_at": "2026-08-16T12:00:00Z",
 }
 
 DB_FAILURE_PAYLOAD = {
-    "message": "Failed to ping your deployment. Please check your MongoDB connection.",
+    "message": "Failed to ping your deployment.",
     "env": "production",
-    "supabase_ref": "abcxyz",
-    "mongo_db": None,
+    "supabase_ref": None,
     "git_sha": "87f1870",
+    "pr_number": None,
+    "deployed_at": None,
 }
 
 
@@ -62,15 +64,17 @@ class TestPing:
         parsed = json.loads(strip_ansi(result.output))
         assert parsed["message"] == "Ping!"
         assert parsed["env"] == "production"
-        assert parsed["mongo_db"] == "herds"
         assert parsed["git_sha"] == "87f1870"
+        assert parsed["pr_number"] == 366
+        assert parsed["deployed_at"] == "2026-08-16T12:00:00Z"
 
     def test_db_failure_still_exits_zero_and_renders_body(
         self, cli_runner, cli_obj
     ):
-        """A DB-failure body (mongo_db null, "Failed to ping" message) still
-        exits 0 — the CLI reports reachability only. The body is rendered
-        verbatim so the operator can see what's wrong.
+        """A body with null identity fields still exits 0.
+
+        The CLI reports reachability only. The body is rendered so the
+        operator can see what is missing.
         """
         _mock_ping_response(cli_obj["api_client"], DB_FAILURE_PAYLOAD)
 
@@ -78,7 +82,8 @@ class TestPing:
 
         assert result.exit_code == 0, result.output
         parsed = json.loads(strip_ansi(result.output))
-        assert parsed["mongo_db"] is None
+        assert parsed["supabase_ref"] is None
+        assert parsed["pr_number"] is None
         assert parsed["env"] == "production"
         assert parsed["message"].startswith("Failed to ping")
 

@@ -446,15 +446,62 @@ class TestDisplayEventDetails:
         out = capsys.readouterr().err
         assert "2026-08-01 at 7:00 PM" in out
 
+    def test_source_id_rendered_after_event_id(self, capsys):
+        event = {**self.BASE_EVENT, "id": "evt-1", "source_id": "src-42"}
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Source ID: src-42" in out
+        assert out.index("Event ID: evt-1") < out.index("Source ID: src-42")
+
+    def test_extraction_id_omitted_when_same_as_source_id(self, capsys):
+        event = {
+            **self.BASE_EVENT,
+            "id": "evt-1",
+            "source_id": "src-42",
+            "extraction_id": "src-42",
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Source ID: src-42" in out
+        assert "Extraction ID" not in out
+
     def test_extraction_id_rendered_after_event_id(self, capsys):
-        """extraction_id (server PR herds-social/herds#293) is the share/join
-        handle for the extractions commands; it gets a curated line right
-        after the Event ID line."""
+        """extraction_id is printed when it is the only join handle."""
         event = {**self.BASE_EVENT, "id": "evt-1", "extraction_id": "ext-42"}
         self._make_cmd().display_event_details(event)
         out = capsys.readouterr().err
         assert "Extraction ID: ext-42" in out
         assert out.index("Event ID: evt-1") < out.index("Extraction ID: ext-42")
+
+    def test_tombstone_does_not_pretend_to_be_a_live_event(self, capsys):
+        event = {
+            "item_type": "deleted_event",
+            "id": "evt-gone",
+            "title": "Old Picnic",
+            "deleted_at": "2026-08-01T12:00:00Z",
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "Old Picnic" in out
+        assert "Deleted: 2026-08-01T12:00:00Z" in out
+        assert "Unknown date" not in out
+        assert "Unknown category" not in out
+
+    def test_local_timezone_printed_with_date(self, capsys):
+        event = {
+            **self.BASE_EVENT,
+            "date_info": {
+                "raw": {"date": "June 13th, 2025"},
+                "local": {
+                    "date_start": "2025-06-13",
+                    "time_start": "21:00",
+                    "timezone": "America/New_York",
+                },
+            },
+        }
+        self._make_cmd().display_event_details(event)
+        out = capsys.readouterr().err
+        assert "America/New_York" in out
 
     @pytest.mark.parametrize("overrides", [{}, {"extraction_id": None}])
     def test_extraction_id_line_omitted_without_value(self, capsys, overrides):

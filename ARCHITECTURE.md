@@ -23,7 +23,7 @@ herds_cli/
     ├── cmd_image.py          upload, get, detections, in-progress, delete
     ├── cmd_url.py            submit (URL event extraction, optional polling)
     ├── cmd_events.py         list (date filters/sorting), get, update, delete, by-image
-    ├── cmd_extractions.py    list, get, events, ack (extraction jobs; joined from events via EventV2.extraction_id)
+    ├── cmd_sources.py        list, get, events, ack, reprocess, share (sources; joined from events via EventV2.source_id)
     ├── cmd_event_user_data.py  get/update/delete calendar integration data per event
     ├── cmd_config.py         show, validate, set, save, reset
     ├── cmd_user_settings.py  get/update user preferences
