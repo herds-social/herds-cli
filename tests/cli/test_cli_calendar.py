@@ -98,6 +98,15 @@ def _put_bodies(cli_obj: Any) -> list:
     ]
 
 
+def _post_calls(cli_obj: Any) -> list:
+    """Return (url, json-body) tuples from every POST call on the mock."""
+    return [
+        (c.args[1], c.kwargs.get("json"))
+        for c in cli_obj["api_client"].session.request.call_args_list
+        if c.args and c.args[0] == "POST"
+    ]
+
+
 def _feed_keys(*keys: str):
     """Patch _read_keypress to yield the given key sequence to the picker.
 
@@ -513,3 +522,103 @@ class TestSetCalendar:
         # No JSON payload was emitted (we silenced stdout on cancel).
         assert "{" not in (result.stdout or "")
         assert _put_bodies(cli_obj) == []
+
+
+class TestConnectICloud:
+    def test_icloud_posts_caldav_and_does_not_open_browser(
+        self, cli_runner, cli_obj, mock_session_manager
+    ):
+        """iCloud connect prompts, POSTs CalDAV, never opens a browser."""
+        _save_test_session(mock_session_manager)
+        password = "aaaa-bbbb-cccc-dddd"
+        calendar_id = "https://caldav.icloud.com/123/calendars/home/"
+        post_resp = _make_response(200, {
+            "connected": True,
+            "provider": "icloud",
+            "calendar_id": calendar_id,
+            "calendar_name": "Home",
+            "connected_at": "2026-09-10T00:00:00+00:00",
+        })
+        _route_responses(cli_obj, {
+            ("POST", "/api/calendar/connect/caldav"): post_resp,
+        })
+
+        with (
+            patch(
+                "herds_cli.commands.cmd_calendar.click.prompt",
+                side_effect=["user@icloud.com", password],
+            ) as mock_prompt,
+            patch(
+                "herds_cli.commands.cmd_calendar.webbrowser.open"
+            ) as mock_open,
+        ):
+            result = cli_runner.invoke(
+                cli,
+                ["calendar", "connect", "--provider", "icloud"],
+                obj=cli_obj,
+            )
+
+        out = strip_ansi(result.output)
+        assert result.exit_code == 0, out
+        mock_open.assert_not_called()
+        assert mock_prompt.call_count == 2
+        assert mock_prompt.call_args_list[1].kwargs.get("hide_input") is True
+
+        posts = _post_calls(cli_obj)
+        assert len(posts) == 1, f"expected 1 POST, got {posts}"
+        url, body = posts[0]
+        assert "/api/calendar/connect/caldav" in url
+        assert body == {
+            "provider": "icloud",
+            "username": "user@icloud.com",
+            "password": password,
+        }
+
+        get_calls = [
+            c for c in cli_obj["api_client"].session.request.call_args_list
+            if c.args and c.args[0] == "GET"
+        ]
+        assert get_calls == []
+
+        assert "connected" in out.lower()
+        assert "icloud" in out.lower()
+        assert calendar_id in out
+        assert password not in out
+
+    def test_icloud_open_flag_still_does_not_open_browser(
+        self, cli_runner, cli_obj, mock_session_manager
+    ):
+        """--open is an OAuth flag. iCloud must not call webbrowser.open."""
+        _save_test_session(mock_session_manager)
+        password = "xxxx-yyyy-zzzz-wwww"
+        post_resp = _make_response(200, {
+            "connected": True,
+            "provider": "icloud",
+            "calendar_id": "cal-home",
+        })
+        _route_responses(cli_obj, {
+            ("POST", "/api/calendar/connect/caldav"): post_resp,
+        })
+
+        with (
+            patch(
+                "herds_cli.commands.cmd_calendar.click.prompt",
+                side_effect=["apple-id", password],
+            ),
+            patch(
+                "herds_cli.commands.cmd_calendar.webbrowser.open"
+            ) as mock_open,
+        ):
+            result = cli_runner.invoke(
+                cli,
+                ["calendar", "connect", "--provider", "icloud", "--open"],
+                obj=cli_obj,
+            )
+
+        out = strip_ansi(result.output)
+        assert result.exit_code == 0, out
+        mock_open.assert_not_called()
+        assert password not in out
+        posts = _post_calls(cli_obj)
+        assert len(posts) == 1
+        assert "/api/calendar/connect/caldav" in posts[0][0]
