@@ -1,8 +1,9 @@
 """
-Calendar OAuth integration commands for the Herds CLI.
+Calendar integration commands for the Herds CLI.
 
-This module contains commands for connecting and managing calendar providers
-(Google Calendar, Microsoft Outlook) via OAuth.
+This module contains commands for connecting and managing calendar providers.
+Google Calendar and Microsoft Outlook use OAuth. iCloud uses CalDAV with an
+app-specific password.
 """
 
 import click
@@ -135,6 +136,41 @@ def _prompt_for_calendar(
     return calendars[choice - 1]["id"]
 
 
+def _connect_icloud(cmd: CommandBase) -> None:
+    """Prompt for Apple ID credentials and POST CalDAV connect.
+
+    Does not open a browser. The password is sent in the request body only
+    and is never printed.
+    """
+    OutputFormatter.print_info(
+        "iCloud needs an app-specific password, not your Apple ID password."
+    )
+    OutputFormatter.print_info("Create one at https://account.apple.com")
+
+    username = click.prompt("Apple ID").strip()
+    password = click.prompt("App-specific password", hide_input=True).strip()
+
+    url = f"{cmd.api_client.base_url}/api/calendar/connect/caldav"
+    result = cmd.execute_api_request(
+        "POST",
+        url,
+        "Calendar connected!",
+        json={
+            "provider": "icloud",
+            "username": username,
+            "password": password,
+        },
+    )
+
+    OutputFormatter.print_info(f"  Provider:    {result.get('provider', 'N/A')}")
+    OutputFormatter.print_info(f"  Calendar ID: {result.get('calendar_id') or 'N/A'}")
+    calendar_name = result.get("calendar_name")
+    if calendar_name:
+        OutputFormatter.print_info(f"  Calendar:    {calendar_name}")
+
+    APIResponseHandler.format_and_output(result, cmd.output_format)
+
+
 @click.group()
 def calendar() -> None:
     """Calendar integration commands (connect, status, calendars, etc.)"""
@@ -145,7 +181,7 @@ def calendar() -> None:
 @click.option("--email", help="Email address (autodetect if only one session)")
 @click.option(
     "--provider",
-    type=click.Choice(["google", "outlook"]),
+    type=click.Choice(["google", "outlook", "icloud"]),
     required=True,
     help="Calendar provider to connect",
 )
@@ -154,22 +190,29 @@ def calendar() -> None:
     "open_browser",
     is_flag=True,
     default=False,
-    help="Automatically open the OAuth URL in your browser",
+    help="Automatically open the OAuth URL in your browser (Google/Outlook)",
 )
 @click.pass_context
 def connect(ctx: click.Context, email: Optional[str], provider: str, open_browser: bool) -> None:
-    """Start OAuth flow to connect a calendar provider.
+    """Connect a calendar provider.
 
-    Returns an OAuth URL to open in a browser. The server handles the callback.
+    Google and Outlook return an OAuth URL to open in a browser. iCloud
+    prompts for an Apple ID and an app-specific password. It does not open
+    a browser. The server auto-selects a calendar.
 
     Examples:
         herds calendar connect --provider google
         herds calendar connect --provider outlook --open
+        herds calendar connect --provider icloud
     """
     cmd = CommandBase(ctx)
 
     email = cmd.setup_session(email, show_client_type=True)
     cmd.load_session_auth(email)
+
+    if provider == "icloud":
+        _connect_icloud(cmd)
+        return
 
     OutputFormatter.print_info(f"Starting {provider} calendar OAuth flow...")
 
